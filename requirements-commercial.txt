@@ -1,0 +1,3 @@
+# Required for TXT-based domain-control verification before checkout.
+dnspython>=2.6,<3
+reportlab>=4.2,<5

@@ -1,0 +1,21 @@
+
+# Secretos locales: nunca subir al repositorio
+.env
+.env.*
+!.env.example
+
+# Entorno Python y archivos temporales
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Copias y datos locales
+backups/
+*.bak
+*.bak-*
+*.sqlite3
+*.db
+
+# Herramienta local de instalación; no se necesita en producción
+obsidiancyber_paid_delivery_installer.py

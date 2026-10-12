@@ -1,0 +1,2 @@
+# Optional reader for local MaxMind-compatible MMDB files; database files/licenses are separate.
+geoip2>=4.8,<6
