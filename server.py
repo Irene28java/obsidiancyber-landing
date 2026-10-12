@@ -308,7 +308,48 @@ def _commercial_checkout_ready() -> bool:
     return _stripe_is_configured() and _dns_txt_verification_ready() and COMMERCIAL_TERMS_READY and 100 <= PILOT_PRICE_CENTS <= 1_000_000
 
 
-def _db_connect() -> sqlite3.Connection:
+class _PostgresCompatConnection:
+    """Adapta las consultas existentes de SQLite a psycopg 3."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=()):
+        return self.conn.execute(sql.replace("?", "%s"), params)
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+
+def _db_connect():
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        conn = psycopg.connect(
+            database_url, connect_timeout=10, row_factory=dict_row
+        )
+        conn.execute("""CREATE TABLE IF NOT EXISTS orders (
+            order_id TEXT PRIMARY KEY,
+            domain TEXT NOT NULL,
+            email TEXT NOT NULL,
+            challenge_hash TEXT NOT NULL,
+            access_token_hash TEXT NOT NULL,
+            external_intel_consent INTEGER NOT NULL DEFAULT 0,
+            verified INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'verification_pending',
+            stripe_session_id TEXT UNIQUE,
+            price_cents INTEGER NOT NULL,
+            report_json TEXT,
+            report_generated_at TEXT
+        )""")
+        conn.commit()
+        return _PostgresCompatConnection(conn)
+
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
     conn.row_factory = sqlite3.Row
