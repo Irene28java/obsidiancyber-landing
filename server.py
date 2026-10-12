@@ -55,8 +55,8 @@ def _load_dotenv_file() -> None:
 
 _load_dotenv_file()
 
-HOST = os.environ.get("OBSIDIAN_HOST", "127.0.0.1")
-PORT = int(os.environ.get("OBSIDIAN_PORT", "8000"))
+HOST = os.environ.get("OBSIDIAN_HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", os.environ.get("OBSIDIAN_PORT", "8000")))
 MAX_BODY = 8 * 1024
 MAX_IPS = 16
 MAX_TLS_IP_CHECKS = 4
