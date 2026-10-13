@@ -286,14 +286,18 @@ async function loadCommercialStatus() {
   try {
     const response = await fetch('/api/health', { cache: 'no-store' });
     const health = await response.json();
-    const ready = health.payment_enabled === true && health.dns_txt_verification_ready === true;
-    createOrderButton.disabled = !ready;
-    checkoutStatus.className = `checkout-status ${ready ? 'ready' : 'not-ready'}`;
-    checkoutStatus.textContent = ready
-      ? 'Checkout configurado: la compra se procesará mediante Stripe y la ficha se generará después del pago.'
-      : 'Modo de desarrollo: compra automática aún desactivada. Configura Stripe, una URL pública HTTPS, dnspython y completa/revisa condiciones, privacidad e impuestos; no se cobran pedidos desde esta instancia.';
-    if (ready) setOrderMessage('La compra está configurada. Al crear un pedido deberás verificar el control DNS antes de pasar a Stripe.', 'success');
-    else setOrderMessage('La compra no está habilitada en esta instalación. Puedes revisar la muestra; no introduzcas datos de clientes ni intentes cobrar hasta completar la configuración comercial.', 'info');
+    const dnsReady = health.dns_txt_verification_ready === true;
+    const paymentReady = health.payment_enabled === true;
+    createOrderButton.disabled = !dnsReady;
+    checkoutStatus.className = `checkout-status ${paymentReady ? 'ready' : 'not-ready'}`;
+    checkoutStatus.textContent = paymentReady
+      ? 'Pagos configurados: primero verifica el dominio por DNS y después podrás continuar a Stripe.'
+      : dnsReady
+        ? 'Verificación DNS disponible. Los pagos siguen desactivados; no se realizará ningún cobro.'
+        : 'Verificación DNS no disponible. Los pagos siguen desactivados; revisa la configuración antes de continuar.';
+    if (paymentReady) setOrderMessage('Prepara la solicitud y verifica el control DNS antes de pasar a Stripe.', 'success');
+    else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
+    else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const price = `${(Number(health.pilot_price_cents || 7900) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
     payButton.textContent = `Continuar al pago seguro · ${price} ↗`;
     document.querySelectorAll('.pilot-price').forEach((node) => { node.textContent = price; });
