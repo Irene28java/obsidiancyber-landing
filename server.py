@@ -465,7 +465,28 @@ def _verify_order_dns(order: sqlite3.Row) -> tuple[bool, str]:
         return False, f"Se encontró el nombre TXT, pero el valor todavía no coincide. Comprueba el registro {qname}."
     except Exception as exc:
         if exc.__class__.__module__.startswith("dns"):
-            return False, f"No se ha podido verificar el TXT ({type(exc).__name__}). Puede tardar en propagarse; vuelve a intentarlo."
+            error_type = type(exc).__name__
+            if error_type == "NXDOMAIN":
+                return False, (
+                    f"No existe el nombre DNS {qname}. Comprueba que controlas "
+                    "el dominio y que has creado el TXT en la zona DNS correcta. "
+                    "Según el proveedor, el campo Nombre/Host puede requerir solo "
+                    "'_obsidiancyber-verification'."
+                )
+            if error_type == "NoAnswer":
+                return False, (
+                    f"El nombre DNS {qname} no devuelve un registro TXT. "
+                    "Comprueba el tipo de registro, el nombre/host y la propagación DNS."
+                )
+            if error_type in {"LifetimeTimeout", "Timeout"}:
+                return False, (
+                    f"La consulta DNS para {qname} agotó el tiempo de espera. "
+                    "Comprueba los servidores DNS y vuelve a intentarlo."
+                )
+            return False, (
+                f"No se pudo verificar el TXT ({error_type}) para {qname}. "
+                "Comprueba la configuración DNS y vuelve a intentarlo."
+            )
         return False, f"No se pudo verificar el TXT ({type(exc).__name__})."
 
 
