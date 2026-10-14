@@ -20,6 +20,7 @@ import sqlite3
 import ssl
 import sys
 import time
+import threading
 import traceback
 from collections import defaultdict, deque
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -534,31 +535,136 @@ def _paid_report(session_id: str, access_token: str) -> tuple[int, dict]:
 
     if existing_report:
         result = json.loads(existing_report)
-    else:
-        try:
-            result = analyze_domain(order_dict["domain"], external_intel_consent=bool(order_dict["external_intel_consent"]))
-        except Exception as exc:
-            traceback.print_exc(file=sys.stderr)
-            return 500, {"error": f"El pago está confirmado, pero el informe no se pudo generar ({type(exc).__name__}). Contacta con soporte para resolver el pedido."}
-        result["commercial"] = {
-            "order_id": order_dict["order_id"],
-            "payment_status": "paid",
-            "amount_eur": f"{int(order_dict['price_cents']) / 100:.2f}",
-            "generated_after_payment": True,
-            "retention_days": REPORT_RETENTION_DAYS,
+        return 200, {"status": "ready", "report": result}
+
+    # Reserva atómica: evita que dos peticiones generen el mismo informe.
+    # La marca se puede recuperar si el proceso muere y pasan 15 minutos.
+    def _claim_stamp(epoch: float) -> str:
+        whole = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(epoch))
+        micros = int((epoch - int(epoch)) * 1_000_000)
+        return f"{whole}.{micros:06d}+00:00"
+
+    now = time.time()
+    claim_at = f"{_claim_stamp(now)}|{secrets.token_hex(16)}"
+    stale_before = _claim_stamp(now - 900)
+
+    conn = _db_connect()
+    claimed = False
+    latest_report = None
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE orders
+            SET status = 'report_generating', report_generated_at = ?
+            WHERE order_id = ?
+              AND report_json IS NULL
+              AND (
+                  status <> 'report_generating'
+                  OR report_generated_at IS NULL
+                  OR report_generated_at < ?
+              )
+            """,
+            (claim_at, order_dict["order_id"], stale_before),
+        )
+        conn.commit()
+        claimed = cursor.rowcount == 1
+
+        if not claimed:
+            latest = conn.execute(
+                "SELECT report_json FROM orders WHERE order_id = ?",
+                (order_dict["order_id"],),
+            ).fetchone()
+            if latest:
+                latest_report = latest["report_json"]
+    finally:
+        conn.close()
+
+    if not claimed:
+        if latest_report:
+            return 200, {
+                "status": "ready",
+                "report": json.loads(latest_report),
+            }
+        return 202, {
+            "status": "report_generating",
+            "message": "El informe se está generando. Vuelve a consultar en unos segundos.",
         }
-        result["storage"] = f"stored_until_retention_{REPORT_RETENTION_DAYS}_days"
+
+    try:
+        result = analyze_domain(
+            order_dict["domain"],
+            external_intel_consent=bool(order_dict["external_intel_consent"]),
+        )
+    except Exception as exc:
+        traceback.print_exc(file=sys.stderr)
+        # Solo libera la reserva de esta petición, nunca la de otra.
         conn = _db_connect()
         try:
-            conn.execute("UPDATE orders SET report_json = ?, report_generated_at = ?, status = 'report_ready' WHERE order_id = ? AND report_json IS NULL",
-                         (json.dumps(result, ensure_ascii=False), iso_utc(), order_dict["order_id"]))
+            conn.execute(
+                """
+                UPDATE orders
+                SET status = 'payment_pending', report_generated_at = NULL
+                WHERE order_id = ?
+                  AND status = 'report_generating'
+                  AND report_generated_at = ?
+                  AND report_json IS NULL
+                """,
+                (order_dict["order_id"], claim_at),
+            )
             conn.commit()
-            refreshed = conn.execute("SELECT report_json FROM orders WHERE order_id = ?", (order_dict["order_id"],)).fetchone()
-            if refreshed and refreshed["report_json"]:
-                result = json.loads(refreshed["report_json"])
         finally:
             conn.close()
-    return 200, {"status": "ready", "report": result}
+        return 500, {
+            "error": f"El pago está confirmado, pero el informe no se pudo generar ({type(exc).__name__}). Contacta con soporte para resolver el pedido."
+        }
+
+    result["commercial"] = {
+        "order_id": order_dict["order_id"],
+        "payment_status": "paid",
+        "amount_eur": f"{int(order_dict['price_cents']) / 100:.2f}",
+        "generated_after_payment": True,
+        "retention_days": REPORT_RETENTION_DAYS,
+    }
+    result["storage"] = f"stored_until_retention_{REPORT_RETENTION_DAYS}_days"
+
+    conn = _db_connect()
+    try:
+        conn.execute(
+            """
+            UPDATE orders
+            SET report_json = ?, report_generated_at = ?, status = 'report_ready'
+            WHERE order_id = ?
+              AND report_json IS NULL
+              AND status = 'report_generating'
+              AND report_generated_at = ?
+            """,
+            (
+                json.dumps(result, ensure_ascii=False),
+                iso_utc(),
+                order_dict["order_id"],
+                claim_at,
+            ),
+        )
+        conn.commit()
+        refreshed = conn.execute(
+            "SELECT report_json FROM orders WHERE order_id = ?",
+            (order_dict["order_id"],),
+        ).fetchone()
+        saved_report = refreshed["report_json"] if refreshed else None
+    finally:
+        conn.close()
+
+    if saved_report:
+        return 200, {
+            "status": "ready",
+            "report": json.loads(saved_report),
+        }
+
+    # La reserva pudo expirar mientras se calculaba el informe.
+    return 202, {
+        "status": "report_generating",
+        "message": "El informe sigue en proceso. Vuelve a consultar en unos segundos.",
+    }
 
 def _tls_check(domain: str, ip: str) -> dict:
     info = {"status": "error", "ip": ip, "message": "No se pudo completar la comprobación HTTPS."}
@@ -803,24 +909,46 @@ def analyze_domain(domain: str, external_intel_consent: bool = False) -> dict:
 
 
 class RateLimiter:
-    def __init__(self, count: int = 10, window: int = 60):
-        self.count = count
-        self.window = window
+    """Limitador por IP con almacenamiento acotado y acceso seguro entre hilos."""
+
+    def __init__(self, count: int = 10, window: int = 60, max_keys: int = 4096):
+        self.count = max(1, count)
+        self.window = max(1, window)
+        self.max_keys = max(1, max_keys)
         self.accesses: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
 
     def allowed(self, key: str) -> bool:
         now = time.monotonic()
-        items = self.accesses[key]
-        while items and items[0] < now - self.window:
-            items.popleft()
-        if len(items) >= self.count:
-            return False
-        items.append(now)
-        return True
+        cutoff = now - self.window
+
+        with self._lock:
+            if key not in self.accesses and len(self.accesses) >= self.max_keys:
+                # Recupera espacio sin permitir crecimiento ilimitado.
+                for old_key in list(self.accesses):
+                    items = self.accesses[old_key]
+                    while items and items[0] <= cutoff:
+                        items.popleft()
+                    if not items:
+                        del self.accesses[old_key]
+                    if len(self.accesses) < self.max_keys:
+                        break
+
+                if len(self.accesses) >= self.max_keys:
+                    return False
+
+            items = self.accesses[key]
+            while items and items[0] <= cutoff:
+                items.popleft()
+
+            if len(items) >= self.count:
+                return False
+
+            items.append(now)
+            return True
 
 
 LIMITER = RateLimiter()
-
 
 class Handler(SimpleHTTPRequestHandler):
     server_version = "ObsidianCyberLocal/0.4"

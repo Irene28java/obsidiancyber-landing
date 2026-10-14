@@ -321,6 +321,78 @@ class CommercialFlowTests(unittest.TestCase):
             self.assertEqual(payload2["report"]["case_id"], "OC-TEST-REPORT")
             analyze_mock.assert_called_once()
 
+    def test_paid_report_concurrent_requests_only_generate_once(self):
+        import threading
+
+        created, order = self._verified_order()
+        fake_checkout = {
+            "id": "cs_test_concurrent",
+            "url": "https://checkout.stripe.com/c/pay/mock",
+        }
+
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_stripe_api", return_value=fake_checkout):
+            checkout = server._start_checkout(order)
+
+        paid_session = {
+            "id": checkout["session_id"],
+            "status": "complete",
+            "payment_status": "paid",
+            "currency": "eur",
+            "amount_total": created["price_cents"],
+            "client_reference_id": created["order_id"],
+            "metadata": {"order_id": created["order_id"]},
+        }
+        fake_report = {
+            "case_id": "OC-TEST-CONCURRENT",
+            "domain": "example.com",
+            "timeline": [],
+            "score": 0,
+        }
+
+        analysis_started = threading.Event()
+        allow_analysis_to_finish = threading.Event()
+        first_result = []
+
+        def slow_analysis(*args, **kwargs):
+            analysis_started.set()
+            if not allow_analysis_to_finish.wait(timeout=5):
+                raise TimeoutError("La prueba no liberó el análisis a tiempo.")
+            return dict(fake_report)
+
+        def run_first_request():
+            first_result.append(
+                server._paid_report(
+                    checkout["session_id"], created["report_access_token"]
+                )
+            )
+
+        worker = threading.Thread(target=run_first_request, daemon=True)
+
+        with mock.patch.object(server, "_stripe_api", return_value=paid_session), \
+             mock.patch.object(server, "analyze_domain", side_effect=slow_analysis) as analyze_mock:
+            try:
+                worker.start()
+                self.assertTrue(
+                    analysis_started.wait(timeout=3),
+                    "La primera petición no llegó al análisis.",
+                )
+
+                status2, payload2 = server._paid_report(
+                    checkout["session_id"], created["report_access_token"]
+                )
+                self.assertEqual(status2, 202)
+                self.assertEqual(payload2["status"], "report_generating")
+            finally:
+                allow_analysis_to_finish.set()
+                worker.join(timeout=6)
+
+            self.assertFalse(worker.is_alive(), "La primera petición quedó bloqueada.")
+            self.assertEqual(len(first_result), 1)
+            self.assertEqual(first_result[0][0], 200)
+            self.assertEqual(first_result[0][1]["status"], "ready")
+            analyze_mock.assert_called_once()
+
     def test_unpaid_checkout_does_not_run_analysis(self):
         created, order = self._verified_order()
         with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
