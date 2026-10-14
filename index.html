@@ -72,7 +72,7 @@
 
   <section id="workspace" class="section wrap workspace">
     <div class="eyebrow">INTELLIGENCE DESK / 03</div><h2>Order your <em>exposure brief.</em></h2>
-    <p class="intro">El flujo comercial comprueba el control del dominio mediante un registro DNS TXT antes de habilitar el pago. Tras la confirmación de Stripe, genera y muestra la ficha en esta página. La integración comercial necesita configuración y despliegue HTTPS antes de aceptar clientes.</p>
+    <p class="intro">El flujo comercial comprueba el control del dominio mediante un registro DNS TXT antes de habilitar el pago. Tras la confirmación del pago por PayPal, genera y muestra la ficha en esta página. La integración comercial necesita configuración y despliegue HTTPS antes de aceptar clientes.</p>
     <form id="orderForm">
       <div class="formheading"><div><h3>Solicitar informe</h3></div></div>
       <label for="orderDomain">Dominio que controlas</label>
@@ -84,7 +84,7 @@
       <label class="consent"><input id="externalIntelConsent" name="externalIntelConsent" type="checkbox"> <strong>Opcional:</strong> autorizo que las IP públicas del informe se consulten en AbuseIPDB si el proveedor está configurado. Se enviarán solo las IP comprobadas dentro del límite indicado. Sus reportes son orientativos, no una prueba concluyente; puedo comprar el informe sin esta consulta.</label>
       <label class="consent"><input id="termsConsent" name="terms" type="checkbox" required> Acepto el alcance limitado del piloto y entiendo que email/brechas, búsquedas web automáticas y dark web no forman parte de este informe.</label>
       <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y correo se guardan asociados al pedido y al pago; el informe se conserva durante el plazo indicado en la configuración (por defecto, 30 días) y después se purga. DNS/TLS se consulta desde el servidor. Las IP solo se envían a un proveedor externo de reputación si esa integración está configurada y marcas la autorización opcional; puedes comprar el informe sin la consulta externa. No introduzcas contraseñas ni datos personales encontrados en fuentes OSINT.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p></div>
-      <div id="orderMessage" class="form-message info" role="status" aria-live="polite">El checkout se habilita cuando estén configurados Stripe, la URL pública HTTPS y la verificación DNS TXT. Puedes revisar el informe de muestra mientras tanto.</div>
+      <div id="orderMessage" class="form-message info" role="status" aria-live="polite">El pago se habilita cuando PayPal, la URL pública HTTPS y la verificación DNS TXT estén configurados. Puedes revisar el informe de muestra mientras tanto.</div>
     </form>
     <div id="verificationPanel" class="verification-panel" hidden>
       <div class="verification-header"><span class="eyebrow">DOMAIN CONTROL / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>

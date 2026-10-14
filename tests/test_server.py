@@ -283,129 +283,141 @@ class CommercialFlowTests(unittest.TestCase):
     def test_checkout_cannot_start_without_domain_verification(self):
         created = server._create_order("example.com", "buyer@example.com", True)
         order = server._order_row(created["order_id"])
-        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True):
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_paypal_api") as paypal_mock:
             with self.assertRaises(PermissionError):
                 server._start_checkout(order)
+            paypal_mock.assert_not_called()
 
-    def test_paid_report_requires_access_token_before_stripe_lookup(self):
+    def test_paid_report_requires_access_token_before_paypal_lookup(self):
         created, order = self._verified_order()
+        fake_checkout = {
+            "id": "5O190127TN364715T",
+            "links": [{"rel": "approve", "href": f"https://{'www.sandbox.paypal.com' if server.PAYPAL_ENVIRONMENT == 'sandbox' else 'www.paypal.com'}/checkoutnow?token=5O190127TN364715T"}],
+        }
         with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
-             mock.patch.object(server, "_stripe_api", return_value={"id": "cs_test_123", "url": "https://checkout.stripe.com/c/pay/mock"}):
+             mock.patch.object(server, "_paypal_api", return_value=fake_checkout):
             checkout = server._start_checkout(order)
-        with mock.patch.object(server, "_stripe_api") as stripe_mock:
-            status, payload = server._paid_report(checkout["session_id"], "wrong-token")
+        with mock.patch.object(server, "_paypal_api") as paypal_mock:
+            status, payload = server._paid_report(checkout["payment_id"], "wrong-token")
         self.assertEqual(status, 403)
         self.assertIn("Token de acceso", payload["error"])
-        stripe_mock.assert_not_called()
+        paypal_mock.assert_not_called()
+
+    def test_capture_requires_access_token_before_paypal_lookup(self):
+        created, order = self._verified_order()
+        payment_id = "5O190127TN364715T"
+        host = "www.sandbox.paypal.com" if server.PAYPAL_ENVIRONMENT == "sandbox" else "www.paypal.com"
+        fake_checkout = {
+            "id": payment_id,
+            "links": [{"rel": "approve", "href": f"https://{host}/checkoutnow?token={payment_id}"}],
+        }
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_paypal_api", return_value=fake_checkout):
+            checkout = server._start_checkout(order)
+        with mock.patch.object(server, "_paypal_api") as paypal_mock:
+            status, payload = server._capture_paypal_order(checkout["payment_id"], "wrong-token")
+        self.assertEqual(status, 403)
+        self.assertIn("Token de acceso", payload["error"])
+        paypal_mock.assert_not_called()
 
     def test_paid_report_generates_once_after_confirmed_payment(self):
         created, order = self._verified_order()
-        fake_checkout = {"id": "cs_test_mock123", "url": "https://checkout.stripe.com/c/pay/mock"}
-        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
-             mock.patch.object(server, "_stripe_api", return_value=fake_checkout):
-            checkout = server._start_checkout(order)
-        paid_session = {
-            "id": checkout["session_id"], "status": "complete", "payment_status": "paid", "currency": "eur",
-            "amount_total": created["price_cents"], "client_reference_id": created["order_id"],
-            "metadata": {"order_id": created["order_id"]}
+        payment_id = "5O190127TN364715T"
+        fake_checkout = {
+            "id": payment_id,
+            "links": [{"rel": "approve", "href": f"https://{'www.sandbox.paypal.com' if server.PAYPAL_ENVIRONMENT == 'sandbox' else 'www.paypal.com'}/checkoutnow?token={payment_id}"}],
+        }
+        paid_order = {
+            "id": payment_id, "status": "COMPLETED",
+            "purchase_units": [{
+                "reference_id": created["order_id"], "custom_id": created["order_id"],
+                "amount": {"currency_code": "EUR", "value": "79.00"},
+                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": "79.00"}}]},
+            }],
         }
         fake_report = {"case_id": "OC-TEST-REPORT", "domain": "example.com", "timeline": [], "score": 0}
-        with mock.patch.object(server, "_stripe_api", return_value=paid_session), \
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_paypal_api", side_effect=[fake_checkout, paid_order, paid_order]), \
              mock.patch.object(server, "analyze_domain", return_value=fake_report) as analyze_mock:
-            status, payload = server._paid_report(checkout["session_id"], created["report_access_token"])
+            checkout = server._start_checkout(order)
+            status, payload = server._paid_report(checkout["payment_id"], created["report_access_token"])
             self.assertEqual(status, 200)
             self.assertEqual(payload["status"], "ready")
             self.assertEqual(payload["report"]["commercial"]["payment_status"], "paid")
-            status2, payload2 = server._paid_report(checkout["session_id"], created["report_access_token"])
+            status2, payload2 = server._paid_report(checkout["payment_id"], created["report_access_token"])
             self.assertEqual(status2, 200)
             self.assertEqual(payload2["report"]["case_id"], "OC-TEST-REPORT")
             analyze_mock.assert_called_once()
 
     def test_paid_report_concurrent_requests_only_generate_once(self):
         import threading
-
         created, order = self._verified_order()
+        payment_id = "5O190127TN364716U"
         fake_checkout = {
-            "id": "cs_test_concurrent",
-            "url": "https://checkout.stripe.com/c/pay/mock",
+            "id": payment_id,
+            "links": [{"rel": "approve", "href": f"https://{'www.sandbox.paypal.com' if server.PAYPAL_ENVIRONMENT == 'sandbox' else 'www.paypal.com'}/checkoutnow?token={payment_id}"}],
         }
-
-        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
-             mock.patch.object(server, "_stripe_api", return_value=fake_checkout):
-            checkout = server._start_checkout(order)
-
-        paid_session = {
-            "id": checkout["session_id"],
-            "status": "complete",
-            "payment_status": "paid",
-            "currency": "eur",
-            "amount_total": created["price_cents"],
-            "client_reference_id": created["order_id"],
-            "metadata": {"order_id": created["order_id"]},
+        paid_order = {
+            "id": payment_id, "status": "COMPLETED",
+            "purchase_units": [{
+                "reference_id": created["order_id"], "custom_id": created["order_id"],
+                "amount": {"currency_code": "EUR", "value": "79.00"},
+                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": "79.00"}}]},
+            }],
         }
-        fake_report = {
-            "case_id": "OC-TEST-CONCURRENT",
-            "domain": "example.com",
-            "timeline": [],
-            "score": 0,
-        }
-
+        fake_report = {"case_id": "OC-TEST-CONCURRENT", "domain": "example.com", "timeline": [], "score": 0}
         analysis_started = threading.Event()
         allow_analysis_to_finish = threading.Event()
         first_result = []
-
         def slow_analysis(*args, **kwargs):
             analysis_started.set()
             if not allow_analysis_to_finish.wait(timeout=5):
                 raise TimeoutError("La prueba no liberó el análisis a tiempo.")
             return dict(fake_report)
-
         def run_first_request():
-            first_result.append(
-                server._paid_report(
-                    checkout["session_id"], created["report_access_token"]
-                )
-            )
-
+            first_result.append(server._paid_report(payment_id, created["report_access_token"]))
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_paypal_api", return_value=fake_checkout):
+            server._start_checkout(order)
         worker = threading.Thread(target=run_first_request, daemon=True)
-
-        with mock.patch.object(server, "_stripe_api", return_value=paid_session), \
+        with mock.patch.object(server, "_paypal_api", return_value=paid_order), \
              mock.patch.object(server, "analyze_domain", side_effect=slow_analysis) as analyze_mock:
             try:
                 worker.start()
-                self.assertTrue(
-                    analysis_started.wait(timeout=3),
-                    "La primera petición no llegó al análisis.",
-                )
-
-                status2, payload2 = server._paid_report(
-                    checkout["session_id"], created["report_access_token"]
-                )
+                self.assertTrue(analysis_started.wait(timeout=3), "La primera petición no llegó al análisis.")
+                status2, payload2 = server._paid_report(payment_id, created["report_access_token"])
                 self.assertEqual(status2, 202)
                 self.assertEqual(payload2["status"], "report_generating")
             finally:
                 allow_analysis_to_finish.set()
                 worker.join(timeout=6)
-
             self.assertFalse(worker.is_alive(), "La primera petición quedó bloqueada.")
             self.assertEqual(len(first_result), 1)
             self.assertEqual(first_result[0][0], 200)
             self.assertEqual(first_result[0][1]["status"], "ready")
             analyze_mock.assert_called_once()
 
-    def test_unpaid_checkout_does_not_run_analysis(self):
+    def test_unpaid_paypal_order_does_not_run_analysis(self):
         created, order = self._verified_order()
-        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
-             mock.patch.object(server, "_stripe_api", return_value={"id": "cs_test_mock456", "url": "https://checkout.stripe.com/c/pay/mock"}):
-            checkout = server._start_checkout(order)
-        unpaid = {
-            "id": checkout["session_id"], "status": "open", "payment_status": "unpaid", "currency": "eur",
-            "amount_total": created["price_cents"], "client_reference_id": created["order_id"],
-            "metadata": {"order_id": created["order_id"]}
+        payment_id = "5O190127TN364717V"
+        fake_checkout = {
+            "id": payment_id,
+            "links": [{"rel": "approve", "href": f"https://{'www.sandbox.paypal.com' if server.PAYPAL_ENVIRONMENT == 'sandbox' else 'www.paypal.com'}/checkoutnow?token={payment_id}"}],
         }
-        with mock.patch.object(server, "_stripe_api", return_value=unpaid), \
+        unpaid_order = {
+            "id": payment_id, "status": "APPROVED",
+            "purchase_units": [{
+                "reference_id": created["order_id"], "custom_id": created["order_id"],
+                "amount": {"currency_code": "EUR", "value": "79.00"},
+            }],
+        }
+        with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
+             mock.patch.object(server, "_paypal_api", return_value=fake_checkout):
+            checkout = server._start_checkout(order)
+        with mock.patch.object(server, "_paypal_api", return_value=unpaid_order), \
              mock.patch.object(server, "analyze_domain") as analyze_mock:
-            status, payload = server._paid_report(checkout["session_id"], created["report_access_token"])
+            status, payload = server._paid_report(checkout["payment_id"], created["report_access_token"])
         self.assertEqual(status, 202)
         self.assertEqual(payload["status"], "payment_pending")
         analyze_mock.assert_not_called()

@@ -13,6 +13,9 @@ import hmac
 import ipaddress
 import json
 import os
+import base64
+import urllib.error
+import urllib.request
 import re
 import secrets
 import socket
@@ -65,7 +68,9 @@ MAX_REPUTATION_CHECKS = 4
 SOCKET_TIMEOUT = 3.0
 PROVIDER_TIMEOUT = 5.0
 PILOT_PRICE_CENTS = int(os.environ.get("OBSIDIAN_REPORT_PRICE_CENTS", "7900"))
-STRIPE_SECRET_KEY = os.environ.get("OBSIDIAN_STRIPE_SECRET_KEY", "").strip()
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
+PAYPAL_ENVIRONMENT = os.environ.get("PAYPAL_ENVIRONMENT", "sandbox").strip().lower()
 PUBLIC_BASE_URL = os.environ.get("OBSIDIAN_PUBLIC_BASE_URL", "").strip().rstrip("/")
 ABUSEIPDB_API_KEY = os.environ.get("OBSIDIAN_ABUSEIPDB_API_KEY", "").strip()
 DB_PATH = Path(os.environ.get("OBSIDIAN_DB_PATH", str(ROOT / "instance" / "obsidiancyber.sqlite3")))
@@ -297,8 +302,10 @@ def _dns_txt_verification_ready() -> bool:
         return False
 
 
-def _stripe_is_configured() -> bool:
-    if not STRIPE_SECRET_KEY or not PUBLIC_BASE_URL:
+def _paypal_is_configured() -> bool:
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET or not PUBLIC_BASE_URL:
+        return False
+    if PAYPAL_ENVIRONMENT not in {"sandbox", "live"}:
         return False
     parsed = urlparse(PUBLIC_BASE_URL)
     local_http_ok = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
@@ -306,7 +313,7 @@ def _stripe_is_configured() -> bool:
 
 
 def _commercial_checkout_ready() -> bool:
-    return _stripe_is_configured() and _dns_txt_verification_ready() and COMMERCIAL_TERMS_READY and 100 <= PILOT_PRICE_CENTS <= 1_000_000
+    return _paypal_is_configured() and _dns_txt_verification_ready() and COMMERCIAL_TERMS_READY and 100 <= PILOT_PRICE_CENTS <= 1_000_000
 
 
 class _PostgresCompatConnection:
@@ -343,11 +350,13 @@ def _db_connect():
             verified INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'verification_pending',
-            stripe_session_id TEXT UNIQUE,
+            paypal_order_id TEXT,
             price_cents INTEGER NOT NULL,
             report_json TEXT,
             report_generated_at TEXT
         )""")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS paypal_order_id TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
         conn.commit()
         return _PostgresCompatConnection(conn)
 
@@ -365,11 +374,15 @@ def _db_connect():
         verified INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'verification_pending',
-        stripe_session_id TEXT UNIQUE,
+        paypal_order_id TEXT,
         price_cents INTEGER NOT NULL,
         report_json TEXT,
         report_generated_at TEXT
     )""")
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
+    if "paypal_order_id" not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN paypal_order_id TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
     conn.commit()
     try:
         os.chmod(DB_PATH, 0o600)
@@ -391,28 +404,6 @@ def _order_row(order_id: str) -> sqlite3.Row | None:
         return conn.execute("SELECT * FROM orders WHERE order_id = ?", (order_id,)).fetchone()
     finally:
         conn.close()
-
-
-def _stripe_api(method: str, path: str, form_data: dict | None = None) -> dict:
-    if not STRIPE_SECRET_KEY:
-        raise RuntimeError("Stripe no está configurado.")
-    encoded = urlencode(form_data or {}).encode("utf-8") if form_data is not None else None
-    request = Request(
-        "https://api.stripe.com/v1/" + path.lstrip("/"),
-        data=encoded,
-        headers={"Authorization": f"Bearer {STRIPE_SECRET_KEY}", "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "ObsidianCyber/0.4"},
-        method=method.upper(),
-    )
-    try:
-        with urlopen(request, timeout=PROVIDER_TIMEOUT) as response:
-            payload = json.loads(response.read(1024 * 1024).decode("utf-8"))
-        if not isinstance(payload, dict):
-            raise RuntimeError("Respuesta de Stripe no válida.")
-        return payload
-    except HTTPError as exc:
-        raise RuntimeError(f"Stripe rechazó la solicitud (HTTP {exc.code}). Revisa la configuración de la cuenta y las claves.") from exc
-    except (URLError, TimeoutError, socket.timeout, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise RuntimeError(f"No se pudo contactar con Stripe ({type(exc).__name__}).") from exc
 
 
 def _create_order(domain: str, email: str, external_intel_consent: bool) -> dict:
@@ -490,49 +481,189 @@ def _verify_order_dns(order: sqlite3.Row) -> tuple[bool, str]:
         return False, f"No se pudo verificar el TXT ({type(exc).__name__})."
 
 
+def _paypal_base_url() -> str:
+    if PAYPAL_ENVIRONMENT == "sandbox":
+        return "https://api-m.sandbox.paypal.com"
+    if PAYPAL_ENVIRONMENT == "live":
+        return "https://api-m.paypal.com"
+    raise RuntimeError("PAYPAL_ENVIRONMENT debe ser sandbox o live.")
+
+
+def _paypal_access_token() -> str:
+    if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+        raise RuntimeError("PayPal no está configurado: faltan las credenciales API.")
+    basic = base64.b64encode(f"{PAYPAL_CLIENT_ID}:{PAYPAL_CLIENT_SECRET}".encode("utf-8")).decode("ascii")
+    request = urllib.request.Request(
+        _paypal_base_url() + "/v1/oauth2/token",
+        data=b"grant_type=client_credentials",
+        headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"PayPal rechazó la autenticación (HTTP {exc.code}); revisa las credenciales y el entorno.") from exc
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("No se pudo completar la autenticación con PayPal.") from exc
+    token = str(payload.get("access_token") or "")
+    if not token:
+        raise RuntimeError("PayPal no devolvió un token de acceso válido.")
+    return token
+
+
+def _paypal_api(method: str, path: str, payload: dict | None = None, request_id: str | None = None) -> dict:
+    token = _paypal_access_token()
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "ObsidianCyber/0.5",
+    }
+    if request_id:
+        headers["PayPal-Request-Id"] = request_id[:38]
+    request = urllib.request.Request(
+        _paypal_base_url() + "/" + path.lstrip("/"),
+        data=data,
+        headers=headers,
+        method=method.upper(),
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            raw = response.read()
+        if not raw:
+            return {}
+        result = json.loads(raw.decode("utf-8"))
+        if not isinstance(result, dict):
+            raise RuntimeError("PayPal devolvió una respuesta no válida.")
+        return result
+    except urllib.error.HTTPError as exc:
+        # Do not include provider response bodies in logs/errors; they may contain identifiers.
+        raise RuntimeError(f"PayPal rechazó la operación (HTTP {exc.code}). Revisa el entorno, la orden y las credenciales.") from exc
+    except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("No se pudo contactar con PayPal o interpretar su respuesta.") from exc
+
+
+def _paypal_order_paid(payment: dict, order: dict) -> bool:
+    if payment.get("status") != "COMPLETED":
+        return False
+    expected_amount = f"{int(order['price_cents']) / 100:.2f}"
+    for unit in payment.get("purchase_units") or []:
+        if order["order_id"] not in {unit.get("custom_id"), unit.get("reference_id")}:
+            continue
+        for capture in (unit.get("payments") or {}).get("captures") or []:
+            amount = capture.get("amount") or {}
+            if (capture.get("status") == "COMPLETED"
+                    and amount.get("currency_code") == "EUR"
+                    and str(amount.get("value")) == expected_amount):
+                return True
+    return False
+
+
 def _start_checkout(order: sqlite3.Row) -> dict:
     if not _commercial_checkout_ready():
-        raise RuntimeError("Los pagos automáticos aún no están habilitados: requiere Stripe, URL pública HTTPS y verificación TXT disponible.")
+        raise RuntimeError("El pago con PayPal no está habilitado: revisa credenciales PayPal, URL HTTPS, DNS y condiciones comerciales.")
     if not order["verified"]:
         raise PermissionError("Verifica el control del dominio mediante el registro TXT antes de pagar.")
-    amount = int(order["price_cents"])
-    form = {
-        "mode": "payment",
-        "success_url": f"{PUBLIC_BASE_URL}/index.html?checkout_session_id={{CHECKOUT_SESSION_ID}}#workspace",
-        "cancel_url": f"{PUBLIC_BASE_URL}/index.html#workspace",
-        "customer_email": order["email"],
-        "client_reference_id": order["order_id"],
-        "line_items[0][quantity]": "1",
-        "line_items[0][price_data][currency]": "eur",
-        "line_items[0][price_data][unit_amount]": str(amount),
-        "line_items[0][price_data][product_data][name]": "ObsidianCyber Exposure Brief",
-        "line_items[0][price_data][product_data][description]": "Informe defensivo delimitado DNS/TLS e inteligencia IP opcional cuando esté configurada.",
-        "metadata[order_id]": order["order_id"],
-        "payment_intent_data[metadata][order_id]": order["order_id"],
+    order_id = str(order["order_id"])
+    amount = f"{int(order['price_cents']) / 100:.2f}"
+    payload = {
+        "intent": "CAPTURE",
+        "purchase_units": [{
+            "reference_id": order_id,
+            "custom_id": order_id,
+            "description": "ObsidianCyber Exposure Brief",
+            "amount": {"currency_code": "EUR", "value": amount},
+        }],
+        "payment_source": {
+            "paypal": {
+                "experience_context": {
+                    "brand_name": "ObsidianCyber",
+                    "user_action": "PAY_NOW",
+                    "shipping_preference": "NO_SHIPPING",
+                    "return_url": f"{PUBLIC_BASE_URL}/index.html?paypal_return=1#workspace",
+                    "cancel_url": f"{PUBLIC_BASE_URL}/index.html?paypal_cancelled=1#workspace",
+                }
+            }
+        },
     }
-    session = _stripe_api("POST", "checkout/sessions", form)
-    session_id = str(session.get("id") or "")
-    checkout_url = str(session.get("url") or "")
-    if not session_id.startswith("cs_") or not checkout_url.startswith("https://checkout.stripe.com/"):
-        raise RuntimeError("Stripe no devolvió una sesión de Checkout válida.")
+    payment = _paypal_api("POST", "/v2/checkout/orders", payload, request_id=f"OC-CREATE-{order_id}")
+    payment_id = str(payment.get("id") or "")
+    if not re.fullmatch(r"[A-Z0-9]{1,36}", payment_id):
+        raise RuntimeError("PayPal no devolvió un identificador de orden válido.")
+    approve = next((link.get("href") for link in payment.get("links", [])
+                    if link.get("rel") in {"approve", "payer-action"} and isinstance(link.get("href"), str)), "")
+    parsed_approve = urlparse(approve)
+    expected_host = "www.sandbox.paypal.com" if PAYPAL_ENVIRONMENT == "sandbox" else "www.paypal.com"
+    if parsed_approve.scheme != "https" or parsed_approve.hostname != expected_host:
+        raise RuntimeError("PayPal no devolvió una URL de aprobación válida para el entorno configurado.")
     conn = _db_connect()
     try:
-        conn.execute("UPDATE orders SET stripe_session_id = ?, status = 'payment_pending' WHERE order_id = ?", (session_id, order["order_id"]))
+        conn.execute(
+            "UPDATE orders SET paypal_order_id = ?, status = 'payment_pending' WHERE order_id = ? AND verified = 1",
+            (payment_id, order_id),
+        )
         conn.commit()
     finally:
         conn.close()
-    return {"checkout_url": checkout_url, "session_id": session_id, "order_id": order["order_id"]}
+    return {"checkout_url": approve, "session_id": payment_id, "payment_id": payment_id, "order_id": order_id}
 
 
-def _paid_report(session_id: str, access_token: str) -> tuple[int, dict]:
-    if not re.fullmatch(r"cs_[A-Za-z0-9_]+", session_id or ""):
-        return 400, {"error": "Identificador de Checkout no válido."}
+def _capture_paypal_order(payment_id: str, access_token: str) -> tuple[int, dict]:
+    if not isinstance(payment_id, str) or not re.fullmatch(r"[A-Z0-9]{1,36}", payment_id):
+        return 400, {"error": "Identificador de orden PayPal no válido."}
     conn = _db_connect()
     try:
         _purge_expired_orders(conn)
-        order = conn.execute("SELECT * FROM orders WHERE stripe_session_id = ?", (session_id,)).fetchone()
+        order = conn.execute("SELECT * FROM orders WHERE paypal_order_id = ?", (payment_id,)).fetchone()
         if not order:
-            return 404, {"error": "No se encontró un pedido asociado a esa sesión."}
+            return 404, {"error": "No se encontró un pedido asociado a esta orden PayPal."}
+        supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
+        if not access_token or not hmac.compare_digest(supplied_hash, str(order["access_token_hash"])):
+            return 403, {"error": "Token de acceso al informe no válido."}
+        if not order["verified"]:
+            return 403, {"error": "El control del dominio no está verificado."}
+        order_dict = dict(order)
+    finally:
+        conn.close()
+    try:
+        current = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
+        if current.get("status") != "COMPLETED":
+            if current.get("status") != "APPROVED":
+                return 202, {"status": "payment_pending", "message": "PayPal todavía no ha aprobado el pago."}
+            try:
+                _paypal_api("POST", f"/v2/checkout/orders/{payment_id}/capture", {}, request_id=f"OC-CAP-{order_dict['order_id']}")
+            except RuntimeError:
+                # A retry can happen after PayPal captured the funds but the HTTP response was lost.
+                current = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
+                if current.get("status") != "COMPLETED":
+                    raise
+        final_order = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
+    except RuntimeError as exc:
+        return 503, {"error": str(exc)}
+    if final_order.get("status") != "COMPLETED":
+        return 202, {"status": "payment_pending", "message": "PayPal todavía no confirma la captura."}
+    if not _paypal_order_paid(final_order, order_dict):
+        return 402, {"error": "El importe, la moneda o la referencia del pago no coincide con el pedido."}
+    conn = _db_connect()
+    try:
+        conn.execute("UPDATE orders SET status = 'paid' WHERE order_id = ? AND report_json IS NULL", (order_dict["order_id"],))
+        conn.commit()
+    finally:
+        conn.close()
+    return 200, {"status": "paid", "payment_id": payment_id}
+
+
+def _paid_report(payment_id: str, access_token: str) -> tuple[int, dict]:
+    if not isinstance(payment_id, str) or not re.fullmatch(r"[A-Z0-9]{1,36}", payment_id):
+        return 400, {"error": "Identificador de orden PayPal no válido."}
+    conn = _db_connect()
+    try:
+        _purge_expired_orders(conn)
+        order = conn.execute("SELECT * FROM orders WHERE paypal_order_id = ?", (payment_id,)).fetchone()
+        if not order:
+            return 404, {"error": "No se encontró un pedido asociado a esta orden PayPal."}
         supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
         if not access_token or not hmac.compare_digest(supplied_hash, str(order["access_token_hash"])):
             return 403, {"error": "Token de acceso al informe no válido."}
@@ -542,18 +673,14 @@ def _paid_report(session_id: str, access_token: str) -> tuple[int, dict]:
         order_dict = dict(order)
     finally:
         conn.close()
-
     try:
-        session = _stripe_api("GET", f"checkout/sessions/{session_id}")
+        payment = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
     except RuntimeError as exc:
         return 503, {"error": str(exc)}
-    if session.get("metadata", {}).get("order_id") != order_dict["order_id"] or session.get("client_reference_id") != order_dict["order_id"]:
-        return 403, {"error": "La sesión de pago no coincide con el pedido."}
-    if session.get("payment_status") != "paid" or session.get("status") != "complete":
-        return 202, {"status": "payment_pending", "message": "Pago todavía no confirmado por Stripe."}
-    if str(session.get("currency") or "").lower() != "eur" or int(session.get("amount_total") or 0) != int(order_dict["price_cents"]):
-        return 402, {"error": "El importe confirmado no coincide con el pedido esperado."}
-
+    if payment.get("status") != "COMPLETED":
+        return 202, {"status": "payment_pending", "message": "PayPal todavía no confirma el pago."}
+    if not _paypal_order_paid(payment, order_dict):
+        return 402, {"error": "No se ha podido verificar que PayPal capturase el importe y la moneda esperados."}
     if existing_report:
         result = json.loads(existing_report)
         return 200, {"status": "ready", "report": result}
@@ -1034,6 +1161,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "status": "ok", "product": "ObsidianCyber", "version": "0.4", "mode": "commercial-pilot-mvp",
                 "analysis": "passive-dns-tls-only", "persistence": True,
                 "payment_enabled": _commercial_checkout_ready(),
+                "payment_provider": "paypal",
                 "dns_txt_verification_ready": _dns_txt_verification_ready(),
                 "commercial_terms_ready": COMMERCIAL_TERMS_READY,
                 "reputation_enabled": bool(os.environ.get("OBSIDIAN_ABUSEIPDB_API_KEY", "").strip()),
@@ -1046,9 +1174,9 @@ class Handler(SimpleHTTPRequestHandler):
             if not self._rate_allowed():
                 return self._json(429, {"error": "Límite de solicitudes local alcanzado; espera un minuto."})
             query = parse_qs(parsed.query)
-            session_id = query.get("session_id", [""])[0]
+            session_id = query.get("payment_id", [""])[0]
             token = self.headers.get("X-Obsidian-Report-Token", "")
-            # Revalida en servidor el token, el pedido y el estado de Stripe cada vez.
+            # Revalida en servidor el token, el pedido y el estado de PayPal cada vez.
             status, payload = _paid_report(session_id, token)
             if status != 200 or not isinstance(payload, dict) or payload.get("status") != "ready" or not isinstance(payload.get("report"), dict):
                 response_status = status if status != 200 else 403
@@ -1075,7 +1203,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not self._rate_allowed():
                 return self._json(429, {"error": "Límite de solicitudes local alcanzado; espera un minuto."})
             query = parse_qs(parsed.query)
-            session_id = query.get("session_id", [""])[0]
+            session_id = query.get("payment_id", [""])[0]
             token = self.headers.get("X-Obsidian-Report-Token", "")
             status, payload = _paid_report(session_id, token)
             return self._json(status, payload)
@@ -1086,7 +1214,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/sales-chat"}:
+        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/paypal/capture", "/api/sales-chat"}:
             return self._json(404, {"error": "Endpoint no encontrado."})
         if not self._origin_allowed():
             return self._json(403, {"error": "Origen no permitido."})
@@ -1096,6 +1224,12 @@ class Handler(SimpleHTTPRequestHandler):
         if error:
             return self._json(error[0], error[1])
 
+
+        if path == "/api/paypal/capture":
+            payment_id = payload.get("payment_id")
+            access_token = self.headers.get("X-Obsidian-Report-Token", "")
+            status, result = _capture_paypal_order(payment_id, access_token)
+            return self._json(status, result)
 
         # OC_SALES_CHAT_ENDPOINT_V1
         if path == "/api/sales-chat":
@@ -1386,7 +1520,7 @@ def main() -> None:
     print(f"ObsidianCyber local MVP: http://{HOST}:{PORT}")
     print("Alcance base: DNS y comprobaciones HTTPS/TLS limitadas en puerto 443.")
     print("Opcionales: GeoIP local con licencia compatible y reputación AbuseIPDB solo con credenciales + consentimiento explícito.")
-    print("Compra automática desactivada hasta configurar Stripe, HTTPS público, verificación DNS TXT y condiciones comerciales revisadas.")
+    print("Checkout PayPal requiere credenciales válidas, HTTPS público, verificación DNS TXT y condiciones comerciales revisadas.")
     print("Sin escaneo de puertos, explotación, búsquedas de dark web, comprobación de emails ni automatización de buscadores.")
     print("Pulsa Ctrl+C para detener el servidor.")
     try:

@@ -291,11 +291,11 @@ async function loadCommercialStatus() {
     createOrderButton.disabled = !dnsReady;
     checkoutStatus.className = `checkout-status ${paymentReady ? 'ready' : 'not-ready'}`;
     checkoutStatus.textContent = paymentReady
-      ? 'Pagos configurados: primero verifica el dominio por DNS y después podrás continuar a Stripe.'
+      ? 'Pagos configurados: primero verifica el dominio por DNS y después podrás continuar a PayPal.'
       : dnsReady
         ? 'Verificación DNS disponible. Los pagos siguen desactivados; no se realizará ningún cobro.'
         : 'Verificación DNS no disponible. Los pagos siguen desactivados; revisa la configuración antes de continuar.';
-    if (paymentReady) setOrderMessage('Prepara la solicitud y verifica el control DNS antes de pasar a Stripe.', 'success');
+    if (paymentReady) setOrderMessage('Prepara la solicitud y verifica el control DNS antes de pasar a PayPal.', 'success');
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const price = `${(Number(health.pilot_price_cents || 7900) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -377,7 +377,7 @@ payButton?.addEventListener('click', async () => {
 function addPdfDownloadButton(sessionId, accessToken, report) {
   reportEl.querySelector('.pdf-download-actions')?.remove();
   const panel = el('div', 'report-notice pdf-download-actions');
-  panel.append(el('strong', '', 'Informe comercial disponible'), el('p', '', 'El pago está confirmado por Stripe. Descarga una copia PDF del informe.'));
+  panel.append(el('strong', '', 'Informe comercial disponible'), el('p', '', 'El pago está confirmado por PayPal. Descarga una copia PDF del informe.'));
   const button = el('button', 'button primary', 'Descargar informe PDF ↗');
   button.type = 'button';
   const status = el('p', 'subtle-note', 'El servidor volverá a confirmar el pago antes de entregar el PDF.');
@@ -386,7 +386,7 @@ function addPdfDownloadButton(sessionId, accessToken, report) {
     button.textContent = 'Preparando PDF…';
     status.textContent = 'Verificando el pago y generando el PDF…';
     try {
-      const response = await fetch(`/api/paid-report-pdf?session_id=${encodeURIComponent(sessionId)}`, {
+      const response = await fetch(`/api/paid-report-pdf?payment_id=${encodeURIComponent(sessionId)}`, {
         headers: { 'X-Obsidian-Report-Token': accessToken },
         cache: 'no-store'
       });
@@ -421,40 +421,65 @@ function addPdfDownloadButton(sessionId, accessToken, report) {
 
 async function resumePaidReport() {
   const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get('checkout_session_id');
-  if (!sessionId) return;
-  const orderId = localStorage.getItem(`oc-order-for:${sessionId}`);
-  const accessToken = orderId ? localStorage.getItem(`oc-report-token:${orderId}`) : null;
-  window.history.replaceState({}, document.title, `${window.location.pathname}#workspace`);
-  if (!accessToken) {
-    setOrderMessage('No encontramos el token de acceso del pedido en este navegador. No repitas el pago; contacta con soporte y conserva la referencia de Stripe.', 'error');
+  if (params.get('paypal_cancelled') === '1') {
+    window.history.replaceState({}, document.title, `${window.location.pathname}#workspace`);
+    setOrderMessage('Pago cancelado. No se ha confirmado ningún cobro; puedes volver a intentarlo cuando quieras.', 'info');
     return;
   }
-  setOrderMessage('Verificando el pago con Stripe y preparando el informe…', 'info');
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  const paymentId = params.get('token') || params.get('payment_id');
+  if (!paymentId || (params.get('paypal_return') !== '1' && !params.has('token'))) return;
+  const orderId = localStorage.getItem(`oc-order-for:${paymentId}`);
+  const accessToken = orderId ? localStorage.getItem(`oc-report-token:${orderId}`) : null;
+  if (!accessToken) {
+    setOrderMessage('No se encontró el token privado del pedido en este navegador. No vuelvas a pagar; contacta con soporte indicando la referencia del pedido.', 'error');
+    return;
+  }
+  setOrderMessage('Confirmando el pago con PayPal…', 'info');
+  try {
+    const captureResponse = await fetch('/api/paypal/capture', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Obsidian-Report-Token': accessToken
+      },
+      body: JSON.stringify({ payment_id: paymentId }),
+      cache: 'no-store'
+    });
+    const capturePayload = await captureResponse.json().catch(() => ({}));
+    if (captureResponse.status === 202) {
+      setOrderMessage(capturePayload.message || 'PayPal aún está procesando el pago. No vuelvas a pagar; espera un momento y recarga esta página.', 'info');
+      return;
+    }
+    if (!captureResponse.ok) throw new Error(capturePayload.error || `PayPal respondió con HTTP ${captureResponse.status}.`);
+  } catch (error) {
+    setOrderMessage(error.message || 'No se pudo confirmar el pago con PayPal. No vuelvas a pagar; conserva la referencia del pedido y contacta con soporte.', 'error');
+    return;
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
-      const response = await fetch(`/api/paid-report?session_id=${encodeURIComponent(sessionId)}`, {
+      const response = await fetch(`/api/paid-report?payment_id=${encodeURIComponent(paymentId)}`, {
         headers: { 'X-Obsidian-Report-Token': accessToken },
         cache: 'no-store'
       });
       const payload = await response.json().catch(() => ({}));
       if (response.status === 202) {
-        setOrderMessage('Stripe todavía no confirma el pago. Comprobando de nuevo…', 'info');
+        setOrderMessage('PayPal confirma el proceso, preparando el informe…', 'info');
         await new Promise((resolve) => setTimeout(resolve, 1500));
         continue;
       }
       if (!response.ok) throw new Error(payload.error || `Respuesta del servidor: HTTP ${response.status}`);
-      if (payload.status !== 'ready' || !payload.report) throw new Error('El pago se recibió, pero el informe no está disponible todavía. Conserva la referencia del pedido y contacta con soporte.');
-      setOrderMessage('Pago confirmado. Ficha de exposición generada correctamente.', 'success');
+      if (payload.status !== 'ready' || !payload.report) throw new Error('El pago se ha confirmado, pero el informe aún no está disponible. Conserva la referencia del pedido y contacta con soporte.');
+      window.history.replaceState({}, document.title, `${window.location.pathname}#workspace`);
+      setOrderMessage('Pago confirmado por PayPal. Informe generado correctamente.', 'success');
       renderReport(payload.report);
-      addPdfDownloadButton(sessionId, accessToken, payload.report);
+      addPdfDownloadButton(paymentId, accessToken, payload.report);
       return;
     } catch (error) {
       setOrderMessage(error.message || 'No se pudo recuperar el informe pagado.', 'error');
       return;
     }
   }
-  setOrderMessage('Stripe aún no ha confirmado el pago. No vuelvas a pagar; recarga esta página en unos instantes o contacta con soporte.', 'info');
+  setOrderMessage('PayPal ha recibido el pago, pero el informe aún se está preparando. No vuelvas a pagar; vuelve a consultar en unos instantes.', 'info');
 }
 
 async function init() {
