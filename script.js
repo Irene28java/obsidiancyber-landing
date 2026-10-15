@@ -285,7 +285,15 @@ document.querySelector('#copyTxtValue')?.addEventListener('click', () => copyTex
 async function loadCommercialStatus() {
   try {
     const response = await fetch('/api/health', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error(`API health respondió HTTP ${response.status}`);
+    }
+
     const health = await response.json();
+    if (!health || typeof health !== 'object') {
+      throw new Error('La API health no devolvió un objeto JSON válido');
+    }
+
     const dnsReady = health.dns_txt_verification_ready === true;
     const paymentReady = health.payment_enabled === true;
     createOrderButton.disabled = !dnsReady;
@@ -301,11 +309,16 @@ async function loadCommercialStatus() {
     const price = `${(Number(health.pilot_price_cents || 7900) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
     payButton.textContent = `Continuar al pago seguro · ${price} ↗`;
     document.querySelectorAll('.pilot-price').forEach((node) => { node.textContent = price; });
-  } catch {
-    createOrderButton.disabled = true;
-    checkoutStatus.className = 'checkout-status not-ready';
-    checkoutStatus.textContent = 'No se pudo confirmar el estado del backend. El checkout permanece deshabilitado.';
-    setOrderMessage('No se pudo contactar con la API de salud. No se crea ni cobra ningún pedido.', 'error');
+  } catch (error) {
+    console.error('[ObsidianCyber] Error en loadCommercialStatus:', error);
+    if (createOrderButton) createOrderButton.disabled = true;
+    if (checkoutStatus) {
+      checkoutStatus.className = 'checkout-status not-ready';
+      checkoutStatus.textContent = 'No se pudo confirmar el estado del backend. Consulta la consola para ver el error.';
+    }
+    if (typeof setOrderMessage === 'function') {
+      setOrderMessage('No se pudo confirmar el estado del backend. No se crea ni cobra ningún pedido.', 'error');
+    }
   }
 }
 
