@@ -1141,10 +1141,52 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
-        host = self.headers.get("Host")
-        if not origin or not host:
+        if not origin:
             return True
-        return urlparse(origin).netloc.lower() == host.lower()
+
+        try:
+            parsed_origin = urlparse(origin)
+        except ValueError:
+            return False
+
+        if (
+            parsed_origin.scheme not in {"https", "http"}
+            or not parsed_origin.netloc
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+        ):
+            return False
+
+        configured = os.environ.get(
+            "OBSIDIAN_ALLOWED_ORIGINS", ""
+        )
+        allowed_values = [
+            value.strip()
+            for value in configured.split(",")
+            if value.strip()
+        ]
+
+        public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
+        if public_base:
+            allowed_values.append(public_base)
+
+        allowed_origins = set()
+        for value in allowed_values:
+            try:
+                parsed = urlparse(value)
+            except ValueError:
+                continue
+
+            if parsed.scheme.lower() in {"https", "http"} and parsed.netloc:
+                allowed_origins.add(
+                    (parsed.scheme.lower(), parsed.netloc.lower())
+                )
+
+        return (
+            parsed_origin.scheme.lower(),
+            parsed_origin.netloc.lower(),
+        ) in allowed_origins
 
     def _rate_allowed(self) -> bool:
         return LIMITER.allowed(self.client_address[0])
