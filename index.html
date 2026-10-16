@@ -31,7 +31,7 @@
   <div class="ticker">EXTERNAL ATTACK SURFACE　✳　DNS & TLS　✳　IP CONTEXT　✳　EXPOSURE EVIDENCE　✳　ACTIONABLE REPORTS</div>
 
   <section id="capabilities" class="section wrap">
-    <div class="eyebrow">CAPABILITIES / 01</div><h2>Clarity in the <em>noise.</em></h2>
+    <div class="eyebrow">CAPACIDADES / 01</div><h2>Clarity in the <em>noise.</em></h2>
     <p class="intro">No queremos darte una lista interminable de alertas. Queremos ayudarte a distinguir lo observado, lo que necesita validación y lo que debe atenderse primero.</p>
     <div class="grid capability-grid">
       <article><label>01 / DISCOVER</label><h3>Huella digital</h3><p>Resolución DNS y dirección pública observada dentro del alcance autorizado.</p><span class="status status-live">MVP · ACTIVO</span></article>
@@ -44,10 +44,10 @@
     </div>
   </section>
 
-  <section id="workflow" class="workflow"><div class="wrap"><div class="eyebrow">THE METHOD / 02</div><h2>From signal to <em>insight.</em></h2><div class="steps"><p><b>01</b> <strong>Define el alcance</strong><br>Confirma la titularidad del activo o el permiso para evaluarlo. El consentimiento del formulario por sí solo no verifica la propiedad.</p><p><b>02</b> <strong>Recoge señales limitadas</strong><br>Esta versión realiza resolución DNS y comprueba HTTPS/443 de forma pasiva en un máximo de cuatro IPs públicas resueltas. No hace escaneo de puertos ni pruebas de explotación.</p><p><b>03</b> <strong>Interpreta y valida</strong><br>El score se basa en señales comprobadas en este análisis limitado; no es una nota global de seguridad ni una auditoría completa.</p></div></div></section>
+  <section id="workflow" class="workflow"><div class="wrap"><div class="eyebrow">METODOLOGÍA / 02</div><h2>From signal to <em>insight.</em></h2><div class="steps"><p><b>01</b> <strong>Define el alcance</strong><br>Confirma la titularidad del activo o el permiso para evaluarlo. El consentimiento del formulario por sí solo no verifica la propiedad.</p><p><b>02</b> <strong>Recoge señales limitadas</strong><br>Esta versión realiza resolución DNS y comprueba HTTPS/443 de forma pasiva en un máximo de cuatro IPs públicas resueltas. No hace escaneo de puertos ni pruebas de explotación.</p><p><b>03</b> <strong>Interpreta y valida</strong><br>El score se basa en señales comprobadas en este análisis limitado; no es una nota global de seguridad ni una auditoría completa.</p></div></div></section>
 
   <section class="section wrap pilot-offer" id="pilot-offer">
-    <div class="eyebrow">EARLY ACCESS / PAID PILOT</div>
+    <div class="eyebrow">ACCESO ANTICIPADO / PILOTO DE PAGO</div>
     <div class="pilot-layout">
       <div class="pilot-copy">
         <h2>Less noise.<br><em>More evidence.</em></h2>
@@ -61,7 +61,7 @@
         <p class="subtle-note">El informe es una revisión inicial, no una auditoría integral ni una garantía de ausencia de vulnerabilidades.</p>
       </div>
       <aside class="pilot-card">
-        <span class="eyebrow">PILOT / PER DOMAIN</span>
+        <span class="eyebrow">PILOTO / POR DOMINIO</span>
         <div class="pilot-price">79 €</div>
         <p>Precio piloto propuesto · sujeto a alcance, impuestos y condiciones finales.</p>
         <a class="button primary" href="#workspace">Solicitar Exposure Brief ↗</a>
@@ -71,8 +71,8 @@
   </section>
 
   <section id="workspace" class="section wrap workspace">
-    <div class="eyebrow">INTELLIGENCE DESK / 03</div><h2>Order your <em>exposure brief.</em></h2>
-    <p class="intro">El flujo comercial comprueba el control del dominio mediante un registro DNS TXT antes de habilitar el pago. Tras la confirmación del pago por PayPal, genera y muestra la ficha en esta página. La integración comercial necesita configuración y despliegue HTTPS antes de aceptar clientes.</p>
+    <div class="eyebrow">CENTRO DE ANÁLISIS / 03</div><h2>Order your <em>exposure brief.</em></h2>
+    <p class="intro">Primero verificamos el control del dominio mediante un registro DNS TXT. Después podrás elegir un método de pago disponible. El informe se genera y se muestra únicamente cuando el servidor confirma el pago.</p>
     <form id="orderForm">
       <div class="formheading"><div><h3>Solicitar informe</h3></div></div>
       <label for="orderDomain">Dominio que controlas</label>
@@ -83,14 +83,34 @@
       <label class="consent"><input id="orderAuth" name="authorized" type="checkbox" required> Confirmo que soy titular del dominio o tengo autorización expresa para esta revisión.</label>
       <label class="consent"><input id="externalIntelConsent" name="externalIntelConsent" type="checkbox"> <strong>Opcional:</strong> autorizo que las IP públicas del informe se consulten en AbuseIPDB si el proveedor está configurado. Se enviarán solo las IP comprobadas dentro del límite indicado. Sus reportes son orientativos, no una prueba concluyente; puedo comprar el informe sin esta consulta.</label>
       <label class="consent"><input id="termsConsent" name="terms" type="checkbox" required> Acepto el alcance limitado del piloto y entiendo que email/brechas, búsquedas web automáticas y dark web no forman parte de este informe.</label>
-      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y correo se guardan asociados al pedido y al pago; el informe se conserva durante el plazo indicado en la configuración (por defecto, 30 días) y después se purga. DNS/TLS se consulta desde el servidor. Las IP solo se envían a un proveedor externo de reputación si esa integración está configurada y marcas la autorización opcional; puedes comprar el informe sin la consulta externa. No introduzcas contraseñas ni datos personales encontrados en fuentes OSINT.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p></div>
+      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y correo se guardan asociados al pedido y al pago; el informe se conserva durante el plazo indicado en la configuración (por defecto, 30 días) y después se purga. DNS/TLS se consulta desde el servidor. Las IP solo se envían a un proveedor externo de reputación si esa integración está configurada y marcas la autorización opcional; puedes comprar el informe sin la consulta externa. No introduzcas contraseñas ni datos personales encontrados en fuentes OSINT.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p>
+<p id="obsidianSupportContact" class="subtle-note">¿Tienes dudas sobre el servicio o tu pedido? Escríbenos a <a href="mailto:obsidiancyber@hotmail.com">obsidiancyber@hotmail.com</a>.</p></div>
       <div id="orderMessage" class="form-message info" role="status" aria-live="polite">El pago se habilita cuando PayPal, la URL pública HTTPS y la verificación DNS TXT estén configurados. Puedes revisar el informe de muestra mientras tanto.</div>
     </form>
     <div id="verificationPanel" class="verification-panel" hidden>
-      <div class="verification-header"><span class="eyebrow">DOMAIN CONTROL / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>
+      <div class="verification-header"><span class="eyebrow">VERIFICACIÓN DEL DOMINIO / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>
       <div class="txt-value"><span>Nombre / Host</span><code id="txtName"></code><button class="button copy-button" id="copyTxtName" type="button">Copiar</button></div>
       <div class="txt-value"><span>Valor TXT</span><code id="txtValue"></code><button class="button copy-button" id="copyTxtValue" type="button">Copiar</button></div>
       <div class="actions verification-actions"><button class="button primary" id="verifyDomainButton" type="button">Comprobar registro TXT ↗</button><button class="button primary" id="payButton" type="button" disabled>Continuar al pago seguro · 79 € ↗</button></div>
+      <div id="inlinePayPalPanel" class="inline-payments" hidden>
+        <p id="inlinePaymentMessage" class="subtle-note" role="status" aria-live="polite">
+          Selecciona una forma de pago. El informe solo se mostrará tras confirmar el cobro.
+        </p>
+        <div id="paypalButtonContainer"></div>
+        <div id="cardFieldsPanel" hidden>
+          <h3>Pago con tarjeta</h3>
+          <p class="subtle-note">Los datos de tarjeta se introducen en campos seguros alojados por PayPal.</p>
+          <div id="card-name-field-container" class="card-field"></div>
+          <div id="card-number-field-container" class="card-field"></div>
+          <div class="card-fields-grid">
+            <div id="card-expiry-field-container" class="card-field"></div>
+            <div id="card-cvv-field-container" class="card-field"></div>
+          </div>
+          <button id="cardPayButton" class="button primary" type="button">
+            Pagar con tarjeta · 79 €
+          </button>
+        </div>
+      </div>
       <p id="verificationMessage" class="subtle-note" role="status" aria-live="polite"></p>
     </div>
     <div id="report" class="report" hidden aria-live="polite"></div>
@@ -121,7 +141,7 @@
         <input id="ocSalesChatInput" name="message" maxlength="1000" autocomplete="off" placeholder="Escribe tu pregunta…" required>
         <button id="ocSalesChatSend" type="submit">Enviar</button>
       </form>
-      <p class="oc-sales-disclaimer">Asistente de IA. No introduzcas datos sensibles. La compra online aún no está activada.</p>
+      <p class="oc-sales-disclaimer">Asistente de IA. No introduzcas datos sensibles. El informe solo se genera tras la confirmación del pago por el servidor.</p>
     </section>
     <button id="ocSalesChatToggle" class="oc-sales-toggle" type="button" aria-expanded="false" aria-controls="ocSalesChatPanel">
       <span class="oc-sales-toggle-icon">◈</span> Habla con ObsidianCyber

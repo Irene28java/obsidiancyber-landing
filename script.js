@@ -19,6 +19,19 @@ const txtNameEl = document.querySelector('#txtName');
 const txtValueEl = document.querySelector('#txtValue');
 const reportEl = document.querySelector('#report');
 let activeOrder = null;
+let commercialHealth = null;
+let paypalSdkPromise = null;
+let paypalInlineMounted = false;
+let activeCardFields = null;
+let activePaypalOrderId = null;
+let activePaypalOrderFor = null;
+let activePaypalOrderMethod = null;
+
+const inlinePayPalPanel = document.querySelector('#inlinePayPalPanel');
+const inlinePaymentMessage = document.querySelector('#inlinePaymentMessage');
+const paypalButtonContainer = document.querySelector('#paypalButtonContainer');
+const cardFieldsPanel = document.querySelector('#cardFieldsPanel');
+const cardPayButton = document.querySelector('#cardPayButton');
 
 document.querySelector('#year').textContent = String(new Date().getFullYear());
 menu?.addEventListener('click', () => {
@@ -256,13 +269,29 @@ async function postJson(url, body) {
   return payload;
 }
 function showVerification(order) {
+  const isNewOrder = activeOrder?.order_id !== order.order_id;
+  if (isNewOrder) {
+    activePaypalOrderId = null;
+    activePaypalOrderFor = null;
+    activePaypalOrderMethod = null;
+    inlinePayPalPanel.hidden = true;
+    payButton.hidden = false;
+    payButton.textContent = 'Mostrar opciones de pago ↗';
+    if (paypalButtonContainer) paypalButtonContainer.style.pointerEvents = 'auto';
+    if (cardPayButton) cardPayButton.disabled = false;
+  }
+
   activeOrder = order;
   verificationPanel.hidden = false;
   txtNameEl.textContent = order.txt_name;
   txtValueEl.textContent = order.txt_value;
   verifyDomainButton.disabled = false;
-  payButton.disabled = !order.verified;
-  verificationMessage.textContent = order.verified ? 'Dominio verificado. Ya puedes continuar al pago seguro.' : 'Publica el TXT anterior; después vuelve a comprobarlo. No se cobra hasta completar este paso.';
+  payButton.disabled = !order.verified
+    || commercialHealth?.payment_enabled !== true
+    || !commercialHealth?.paypal_client_id;
+  verificationMessage.textContent = order.verified
+    ? 'Dominio verificado. Ya puedes mostrar las opciones de pago seguro.'
+    : 'Publica el TXT anterior; después vuelve a comprobarlo. No se cobra hasta completar este paso.';
 }
 async function copyText(text) {
   try {
@@ -290,6 +319,7 @@ async function loadCommercialStatus() {
     }
 
     const health = await response.json();
+    commercialHealth = health;
     if (!health || typeof health !== 'object') {
       throw new Error('La API health no devolvió un objeto JSON válido');
     }
@@ -299,22 +329,22 @@ async function loadCommercialStatus() {
     createOrderButton.disabled = !dnsReady;
     checkoutStatus.className = `checkout-status ${paymentReady ? 'ready' : 'not-ready'}`;
     checkoutStatus.textContent = paymentReady
-      ? 'Pagos configurados: primero verifica el dominio por DNS y después podrás continuar a PayPal.'
+      ? 'Verifica el control del dominio para continuar. Después podrás elegir un método de pago disponible.'
       : dnsReady
         ? 'Verificación DNS disponible. Los pagos siguen desactivados; no se realizará ningún cobro.'
         : 'Verificación DNS no disponible. Los pagos siguen desactivados; revisa la configuración antes de continuar.';
-    if (paymentReady) setOrderMessage('Prepara la solicitud y verifica el control DNS antes de pasar a PayPal.', 'success');
+    if (paymentReady) setOrderMessage('Prepara la solicitud y confirma el control del dominio para continuar.', 'success');
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const price = `${(Number(health.pilot_price_cents || 7900) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-    payButton.textContent = `Continuar al pago seguro · ${price} ↗`;
+    payButton.textContent = `Mostrar opciones de pago · ${price} ↗`;
     document.querySelectorAll('.pilot-price').forEach((node) => { node.textContent = price; });
   } catch (error) {
     console.error('[ObsidianCyber] Error en loadCommercialStatus:', error);
     if (createOrderButton) createOrderButton.disabled = true;
     if (checkoutStatus) {
       checkoutStatus.className = 'checkout-status not-ready';
-      checkoutStatus.textContent = 'No se pudo confirmar el estado del backend. Consulta la consola para ver el error.';
+      checkoutStatus.textContent = 'No podemos consultar el servicio ahora mismo. Inténtalo de nuevo más tarde.';
     }
     if (typeof setOrderMessage === 'function') {
       setOrderMessage('No se pudo confirmar el estado del backend. No se crea ni cobra ningún pedido.', 'error');
@@ -372,18 +402,209 @@ verifyDomainButton?.addEventListener('click', async () => {
   }
 });
 
+async function loadPayPalSdk() {
+  if (window.paypal?.Buttons && window.paypal?.CardFields) return;
+  if (paypalSdkPromise) return paypalSdkPromise;
+
+  const clientId = commercialHealth?.paypal_client_id;
+  if (!clientId) {
+    throw new Error('El backend aún no proporciona el Client ID público de PayPal. Despliega primero la actualización del backend.');
+  }
+
+  const params = new URLSearchParams({
+    'client-id': clientId,
+    currency: 'EUR',
+    intent: 'capture',
+    components: 'buttons,card-fields'
+  });
+
+  paypalSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://www.paypal.com/sdk/js?${params.toString()}`;
+    script.async = true;
+    script.dataset.obsidianPaypalSdk = 'true';
+    script.onload = () => {
+      if (window.paypal?.Buttons && window.paypal?.CardFields) resolve();
+      else reject(new Error('PayPal no ha cargado los componentes de checkout esperados.'));
+    };
+    script.onerror = () => reject(new Error('No se pudo cargar el SDK de PayPal.'));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    paypalSdkPromise = null;
+    throw error;
+  });
+
+  return paypalSdkPromise;
+}
+
+async function createInlinePayPalOrder(paymentMethod) {
+  if (!activeOrder?.order_id || activeOrder.verified !== true) {
+    throw new Error('Verifica el dominio antes de iniciar el pago.');
+  }
+  if (commercialHealth?.payment_enabled !== true) {
+    throw new Error('El checkout no está habilitado en el backend.');
+  }
+
+  if (
+    activePaypalOrderId
+    && activePaypalOrderFor === activeOrder.order_id
+    && activePaypalOrderMethod === paymentMethod
+  ) {
+    return activePaypalOrderId;
+  }
+
+  const checkout = await postJson('/api/checkout', {
+    order_id: activeOrder.order_id,
+    payment_method: paymentMethod
+  });
+  const paymentId = checkout.payment_id || checkout.session_id;
+  if (!paymentId) throw new Error('PayPal no devolvió un identificador de orden.');
+
+  activePaypalOrderId = paymentId;
+  activePaypalOrderFor = activeOrder.order_id;
+  activePaypalOrderMethod = paymentMethod;
+  localStorage.setItem(`oc-order-for:${paymentId}`, activeOrder.order_id);
+  return paymentId;
+}
+
+async function handleInlinePayPalApproval(data) {
+  const paymentId = data?.orderID;
+  if (!paymentId) {
+    inlinePaymentMessage.textContent = 'PayPal no devolvió la referencia del pago. No vuelvas a pagar; revisa el estado del pedido.';
+    return;
+  }
+
+  const orderId = activeOrder?.order_id || localStorage.getItem(`oc-order-for:${paymentId}`);
+  if (!orderId) {
+    inlinePaymentMessage.textContent = 'No se ha podido asociar el pago con el pedido. No vuelvas a pagar; contacta con soporte.';
+    return;
+  }
+
+  localStorage.setItem(`oc-order-for:${paymentId}`, orderId);
+
+  const returnUrl = new URL(window.location.href);
+  returnUrl.searchParams.set('paypal_return', '1');
+  returnUrl.searchParams.set('token', paymentId);
+  returnUrl.hash = 'workspace';
+  window.history.replaceState(
+    {},
+    document.title,
+    `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`
+  );
+
+  inlinePaymentMessage.textContent = 'Confirmando el cobro con el servidor. No cierres esta página ni vuelvas a pagar.';
+  if (cardPayButton) cardPayButton.disabled = true;
+  if (paypalButtonContainer) paypalButtonContainer.style.pointerEvents = 'none';
+
+  await resumePaidReport();
+}
+
+async function mountInlinePayPalCheckout() {
+  inlinePayPalPanel.hidden = false;
+  if (paypalInlineMounted) return;
+
+  await loadPayPalSdk();
+
+  const buttons = window.paypal.Buttons({
+    createOrder: () => createInlinePayPalOrder('paypal'),
+    onApprove: handleInlinePayPalApproval,
+    onCancel: () => {
+      activePaypalOrderId = null;
+      activePaypalOrderFor = null;
+      activePaypalOrderMethod = null;
+      inlinePaymentMessage.textContent = 'Pago cancelado. No se ha confirmado ningún cobro; puedes volver a intentarlo.';
+    },
+    onError: () => {
+      inlinePaymentMessage.textContent = 'PayPal no ha podido continuar. No se ha confirmado el pago; vuelve a intentarlo o contacta con soporte.';
+    },
+    style: {
+      layout: 'vertical',
+      shape: 'rect',
+      color: 'gold',
+      label: 'paypal'
+    }
+  });
+
+  if (!buttons.isEligible()) {
+    throw new Error('El botón PayPal no está disponible para esta configuración.');
+  }
+  await buttons.render('#paypalButtonContainer');
+
+  const cardFieldStyle = {
+    input: {
+      'font-size': '16px',
+      'font-family': 'Arial, sans-serif',
+      color: '#17252a'
+    },
+    '.invalid': { color: '#b42318' }
+  };
+
+  activeCardFields = window.paypal.CardFields({
+    createOrder: () => createInlinePayPalOrder('card'),
+    onApprove: handleInlinePayPalApproval,
+    onError: () => {
+      activePaypalOrderId = null;
+      activePaypalOrderFor = null;
+      activePaypalOrderMethod = null;
+      if (cardPayButton) cardPayButton.disabled = false;
+      inlinePaymentMessage.textContent = 'No se ha confirmado el pago con tarjeta. Comprueba los datos e inténtalo de nuevo.';
+    },
+    style: cardFieldStyle
+  });
+
+  if (activeCardFields.isEligible()) {
+    cardFieldsPanel.hidden = false;
+    await Promise.all([
+      activeCardFields.NameField({ style: cardFieldStyle }).render('#card-name-field-container'),
+      activeCardFields.NumberField({ style: cardFieldStyle }).render('#card-number-field-container'),
+      activeCardFields.ExpiryField({ style: cardFieldStyle }).render('#card-expiry-field-container'),
+      activeCardFields.CVVField({ style: cardFieldStyle }).render('#card-cvv-field-container')
+    ]);
+    inlinePaymentMessage.textContent = 'Elige PayPal o introduce tu tarjeta en los campos seguros. El informe solo se entrega tras confirmar el cobro.';
+  } else {
+    cardFieldsPanel.hidden = true;
+    inlinePaymentMessage.textContent = 'Los campos de tarjeta integrada no están habilitados para esta cuenta. Puedes utilizar el botón oficial de PayPal.';
+  }
+
+  paypalInlineMounted = true;
+}
+
+cardPayButton?.addEventListener('click', async () => {
+  if (!activeCardFields || !activeOrder?.verified) return;
+  cardPayButton.disabled = true;
+  inlinePaymentMessage.textContent = 'Procesando el pago con tarjeta de forma segura…';
+  try {
+    await activeCardFields.submit();
+  } catch (error) {
+    activePaypalOrderId = null;
+    activePaypalOrderFor = null;
+    activePaypalOrderMethod = null;
+    cardPayButton.disabled = false;
+    inlinePaymentMessage.textContent = 'No se pudo procesar la tarjeta. No vuelvas a pagar si no sabes el estado de la transacción; revisa el pedido antes de reintentarlo.';
+    setOrderMessage(inlinePaymentMessage.textContent, 'error');
+  }
+});
+
 payButton?.addEventListener('click', async () => {
   if (!activeOrder?.order_id || !activeOrder.verified) return;
+  if (commercialHealth?.payment_enabled !== true) {
+    setOrderMessage('El checkout no está disponible en este momento.', 'error');
+    return;
+  }
+
   payButton.disabled = true;
-  payButton.textContent = 'Preparando Checkout…';
+  payButton.textContent = 'Cargando opciones de pago…';
+  inlinePayPalPanel.hidden = false;
+
   try {
-    const checkout = await postJson('/api/checkout', { order_id: activeOrder.order_id });
-    localStorage.setItem(`oc-order-for:${checkout.session_id}`, activeOrder.order_id);
-    window.location.assign(checkout.checkout_url);
+    await mountInlinePayPalCheckout();
+    payButton.hidden = true;
   } catch (error) {
     payButton.disabled = false;
-    setOrderMessage(error.message || 'No se pudo iniciar el pago.', 'error');
-    await loadCommercialStatus();
+    payButton.textContent = 'Reintentar opciones de pago ↗';
+    inlinePayPalPanel.hidden = false;
+    inlinePaymentMessage.textContent = error.message || 'No se pudieron mostrar las opciones de pago.';
+    setOrderMessage(inlinePaymentMessage.textContent, 'error');
   }
 });
 
