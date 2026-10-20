@@ -65,7 +65,7 @@
         <div class="pilot-price">79 €</div>
         <p>Precio piloto propuesto · sujeto a alcance, impuestos y condiciones finales.</p>
         <a class="button primary" href="#workspace">Solicitar Exposure Brief ↗</a>
-        <div id="checkoutStatus" class="checkout-status" role="status">Comprobando si la compra automática está configurada…</div>
+        <div id="checkoutStatus" class="checkout-status" role="status">Preparando tu solicitud…</div>
       </aside>
     </div>
   </section>
@@ -83,9 +83,9 @@
       <label class="consent"><input id="orderAuth" name="authorized" type="checkbox" required> Confirmo que soy titular del dominio o tengo autorización expresa para esta revisión.</label>
       <label class="consent"><input id="externalIntelConsent" name="externalIntelConsent" type="checkbox"> <strong>Opcional:</strong> autorizo que las IP públicas del informe se consulten en AbuseIPDB si el proveedor está configurado. Se enviarán solo las IP comprobadas dentro del límite indicado. Sus reportes son orientativos, no una prueba concluyente; puedo comprar el informe sin esta consulta.</label>
       <label class="consent"><input id="termsConsent" name="terms" type="checkbox" required> Acepto el alcance limitado del piloto y entiendo que email/brechas, búsquedas web automáticas y dark web no forman parte de este informe.</label>
-      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y correo se guardan asociados al pedido y al pago; el informe se conserva durante el plazo indicado en la configuración (por defecto, 30 días) y después se purga. DNS/TLS se consulta desde el servidor. Las IP solo se envían a un proveedor externo de reputación si esa integración está configurada y marcas la autorización opcional; puedes comprar el informe sin la consulta externa. No introduzcas contraseñas ni datos personales encontrados en fuentes OSINT.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p>
+      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y el correo de contacto se vinculan al pedido. Las IP públicas solo se envían a un proveedor externo de reputación si la consulta está disponible y la autorizas expresamente. Puedes solicitar el informe sin esa consulta. Consulta la política de privacidad para conocer las finalidades, la conservación de datos y tus derechos. No introduzcas contraseñas ni datos sensibles.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p>
 <p id="obsidianSupportContact" class="subtle-note">¿Tienes dudas sobre el servicio o tu pedido? Escríbenos a <a href="mailto:obsidiancyber@hotmail.com">obsidiancyber@hotmail.com</a>.</p></div>
-      <div id="orderMessage" class="form-message info" role="status" aria-live="polite">El pago se habilita cuando PayPal, la URL pública HTTPS y la verificación DNS TXT estén configurados. Puedes revisar el informe de muestra mientras tanto.</div>
+      <div id="orderMessage" class="form-message info" role="status" aria-live="polite">Primero verificaremos el control del dominio mediante DNS TXT. Después podrás continuar al pago cuando el pedido esté validado. El informe solo se genera tras la confirmación del pago.</div>
     </form>
     <div id="verificationPanel" class="verification-panel" hidden>
       <div class="verification-header"><span class="eyebrow">VERIFICACIÓN DEL DOMINIO / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>
