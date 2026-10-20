@@ -367,7 +367,7 @@ orderForm?.addEventListener('submit', async (event) => {
       email: orderEmail.value.trim(),
       authorized: true,
       external_intel_consent: externalIntelConsent.checked,
-      terms_acknowledged: true
+      terms_acknowledged: termsConsent.checked
     });
     order.verified = false;
     localStorage.setItem(`oc-report-token:${order.order_id}`, order.report_access_token);

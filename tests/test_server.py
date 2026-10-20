@@ -353,7 +353,15 @@ class ApiSmokeTests(unittest.TestCase):
                         result = json.loads(response.read().decode())
                         self.assertEqual(response.status, 201)
                         self.assertFalse(result['external_intel_consent'])
-                    create_order.assert_called_once_with('example.com', 'buyer@example.com', False)
+                    create_order.assert_called_once()
+                    args, kwargs = create_order.call_args
+                    self.assertEqual(args, ('example.com', 'buyer@example.com', False))
+                    self.assertTrue(kwargs.get('authorization_acknowledged_at'))
+                    self.assertEqual(
+                        kwargs.get('terms_acknowledged_at'),
+                        kwargs.get('authorization_acknowledged_at'),
+                    )
+                    self.assertEqual(kwargs.get('terms_version'), 'pilot-v1-draft')
                 finally:
                     server.DB_PATH = old_db
 
