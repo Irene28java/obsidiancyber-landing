@@ -150,3 +150,50 @@ button:disabled{opacity:.65;cursor:wait}.capability-grid article{display:flex;fl
   .oc-sales-toggle { padding: 11px 14px; }
 }
 /* END OC_SALES_CHAT_WIDGET_V1 */
+
+
+/* OBSIDIAN_PAYPAL_INLINE_CHECKOUT */
+.inline-payments {
+  margin-top: 1rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(91, 221, 205, .28);
+  border-radius: 16px;
+  background: rgba(6, 19, 25, .72);
+}
+.inline-payments[hidden],
+#cardFieldsPanel[hidden] {
+  display: none !important;
+}
+#paypalButtonContainer {
+  width: 100%;
+  max-width: 460px;
+  margin: .75rem auto 1rem;
+}
+#cardFieldsPanel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(91, 221, 205, .2);
+}
+.card-field {
+  min-height: 46px;
+  margin: .65rem 0;
+  padding: .25rem .45rem;
+  border: 1px solid rgba(130, 165, 174, .45);
+  border-radius: 8px;
+  background: #fff;
+}
+.card-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+#cardPayButton {
+  width: 100%;
+  margin-top: .8rem;
+}
+@media (max-width: 480px) {
+  .card-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .2rem;
+  }
+}

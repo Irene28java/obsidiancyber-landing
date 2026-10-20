@@ -112,6 +112,155 @@ class ApiSmokeTests(unittest.TestCase):
         cls.httpd.server_close()
         cls.thread.join(timeout=2)
 
+    def _post_webhook(self, event, with_signature=True):
+        headers = {"Content-Type": "application/json"}
+        if with_signature:
+            headers.update({
+                "PayPal-Auth-Algo": "SHA256withRSA",
+                "PayPal-Cert-Url": (
+                    "https://api-m.sandbox.paypal.com/"
+                    "v1/notifications/certs/test"
+                ),
+                "PayPal-Transmission-Id": "test-transmission-id",
+                "PayPal-Transmission-Sig": "test-signature",
+                "PayPal-Transmission-Time": "2026-10-16T00:00:00Z",
+            })
+
+        request = Request(
+            self.base + "/api/paypal/webhook",
+            data=json.dumps(event).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=3) as response:
+                return response.status, json.loads(
+                    response.read().decode("utf-8")
+                )
+        except HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                payload = {"raw": body}
+            return exc.code, payload
+
+    def test_webhook_rejects_missing_signature_headers(self):
+        with mock.patch.object(
+            server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
+        ), mock.patch.object(server, "_paypal_api") as paypal_mock:
+            status, payload = self._post_webhook(
+                {"event_type": "CHECKOUT.ORDER.APPROVED"},
+                with_signature=False,
+            )
+
+        self.assertEqual(status, 400)
+        self.assertIn("encabezados", payload["error"])
+        paypal_mock.assert_not_called()
+
+    def test_webhook_rejects_invalid_signature(self):
+        with mock.patch.object(
+            server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
+        ), mock.patch.object(
+            server,
+            "_paypal_api",
+            return_value={"verification_status": "FAILURE"},
+        ) as paypal_mock:
+            status, payload = self._post_webhook(
+                {"event_type": "CHECKOUT.ORDER.APPROVED"}
+            )
+
+        self.assertEqual(status, 400)
+        self.assertIn("Firma", payload["error"])
+        self.assertEqual(
+            paypal_mock.call_args[0][1],
+            "/v1/notifications/verify-webhook-signature",
+        )
+
+    def test_webhook_returns_503_if_verification_is_unavailable(self):
+        with mock.patch.object(
+            server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
+        ), mock.patch.object(
+            server, "_paypal_api", side_effect=RuntimeError("test failure")
+        ):
+            status, payload = self._post_webhook(
+                {"event_type": "CHECKOUT.ORDER.APPROVED"}
+            )
+
+        self.assertEqual(status, 503)
+        self.assertIn("verificar", payload["error"])
+
+    def test_webhook_acknowledges_verified_non_payment_event(self):
+        event = {
+            "id": "WH-EVENT-LOCAL",
+            "event_type": "CHECKOUT.ORDER.APPROVED",
+            "resource": {"id": "ORDER-LOCAL"},
+        }
+        with mock.patch.object(
+            server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
+        ), mock.patch.object(
+            server,
+            "_paypal_api",
+            return_value={"verification_status": "SUCCESS"},
+        ) as paypal_mock:
+            status, payload = self._post_webhook(event)
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["received"])
+        verification_payload = paypal_mock.call_args[0][2]
+        self.assertEqual(
+            verification_payload["webhook_id"], "WH-LOCAL-TEST"
+        )
+        self.assertEqual(verification_payload["webhook_event"], event)
+
+    def test_webhook_checks_completed_payment_and_closes_db(self):
+        payment_id = "5O190127TN364715T"
+        event = {
+            "id": "WH-CAPTURE-LOCAL",
+            "event_type": "PAYMENT.CAPTURE.COMPLETED",
+            "resource": {
+                "supplementary_data": {
+                    "related_ids": {"order_id": payment_id}
+                }
+            },
+        }
+        order_row = {
+            "order_id": "OC-ORDER-LOCAL",
+            "paypal_order_id": payment_id,
+            "status": "payment_pending",
+            "price_cents": 7900,
+        }
+        select_conn = mock.Mock()
+        select_conn.execute.return_value.fetchone.return_value = order_row
+        update_conn = mock.Mock()
+
+        with mock.patch.object(
+            server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
+        ), mock.patch.object(
+            server,
+            "_paypal_api",
+            side_effect=[
+                {"verification_status": "SUCCESS"},
+                {"status": "COMPLETED"},
+            ],
+        ) as paypal_mock, mock.patch.object(
+            server, "_db_connect",
+            side_effect=[select_conn, update_conn],
+        ), mock.patch.object(
+            server, "_paypal_order_paid", return_value=True
+        ) as paid_mock:
+            status, payload = self._post_webhook(event)
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["received"])
+        select_conn.close.assert_called_once()
+        update_conn.execute.assert_called_once()
+        update_conn.commit.assert_called_once()
+        update_conn.close.assert_called_once()
+        paid_mock.assert_called_once()
+        self.assertEqual(paypal_mock.call_count, 2)
+
+
     def test_health(self):
         with urlopen(f'{self.base}/api/health', timeout=3) as response:
             data = json.loads(response.read().decode())
@@ -122,7 +271,7 @@ class ApiSmokeTests(unittest.TestCase):
     def test_static_landing_served(self):
         with urlopen(self.base + '/', timeout=3) as response:
             page = response.read().decode('utf-8')
-            self.assertIn('INTELLIGENCE DESK / 03', page)
+            self.assertIn('CENTRO DE ANÁLISIS / 03', page)
             script = urlopen(self.base + '/script.js', timeout=3).read().decode('utf-8')
             self.assertIn('/api/orders', script)
             sample = urlopen(self.base + '/sample-report.html', timeout=3).read().decode('utf-8')
