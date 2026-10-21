@@ -283,7 +283,7 @@ class ApiSmokeTests(unittest.TestCase):
                 self.assertNotIn('COMPLETAR', doc)
                 self.assertNotIn('[NOMBRE LEGAL', doc)
             self.assertIn('Irene Vaquerizo', terms)
-            self.assertIn('95,59', terms)
+            self.assertIn('79,00 € por dominio, IVA incluido', terms)
 
     def test_private_project_files_are_not_served(self):
         for path in ('/server.py', '/.env.example', '/README.md', '/tests/test_server.py'):
@@ -388,10 +388,10 @@ class ApiSmokeTests(unittest.TestCase):
             self.assertEqual(ctx.exception.code, 403)
             create_order.assert_not_called()
 
-    def test_default_price_is_base_plus_vat(self):
-        self.assertEqual(server.PILOT_BASE_PRICE_CENTS, 7900)
-        self.assertEqual(server.PILOT_PRICE_CENTS, 9559)
-        self.assertIn('95,59 €', server._price_text())
+    def test_default_price_is_79_vat_included(self):
+        self.assertEqual(server.PILOT_PRICE_CENTS, 7900)
+        self.assertEqual(server.PILOT_BASE_PRICE_CENTS, 6529)
+        self.assertEqual(server._price_text(), '79,00 € (IVA incluido)')
 
 
 class IntelligenceTests(unittest.TestCase):

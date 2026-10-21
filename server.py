@@ -68,14 +68,13 @@ MAX_TLS_IP_CHECKS = 4
 MAX_REPUTATION_CHECKS = 4
 SOCKET_TIMEOUT = 3.0
 PROVIDER_TIMEOUT = 5.0
-# Base price (excl. VAT) and VAT rate. The VAT-inclusive total is what PayPal charges.
-# OBSIDIAN_REPORT_PRICE_CENTS remains as a direct override of the TOTAL.
-PILOT_BASE_PRICE_CENTS = int(os.environ.get("OBSIDIAN_REPORT_BASE_PRICE_CENTS", "7900"))
+# The price charged by PayPal is the final price, VAT included (79,00 EUR by default).
+# VAT_RATE_PERCENT is only used to show the net/VAT breakdown.
+PILOT_PRICE_CENTS = int(os.environ.get("OBSIDIAN_REPORT_PRICE_CENTS", "7900"))
 VAT_RATE_PERCENT = Decimal(os.environ.get("OBSIDIAN_VAT_RATE_PERCENT", "21"))
-_default_total_cents = int(
-    (Decimal(PILOT_BASE_PRICE_CENTS) * (Decimal("1") + VAT_RATE_PERCENT / Decimal("100"))).to_integral_value(rounding=ROUND_HALF_UP)
+PILOT_BASE_PRICE_CENTS = int(
+    (Decimal(PILOT_PRICE_CENTS) / (Decimal("1") + VAT_RATE_PERCENT / Decimal("100"))).to_integral_value(rounding=ROUND_HALF_UP)
 )
-PILOT_PRICE_CENTS = int(os.environ.get("OBSIDIAN_REPORT_PRICE_CENTS", str(_default_total_cents)))
 
 
 def _eur(cents: int) -> str:
@@ -83,8 +82,7 @@ def _eur(cents: int) -> str:
 
 
 def _price_text() -> str:
-    vat = f"{VAT_RATE_PERCENT:f}".rstrip("0").rstrip(".")
-    return f"{_eur(PILOT_BASE_PRICE_CENTS)} + IVA ({vat} %) = {_eur(PILOT_PRICE_CENTS)}"
+    return f"{_eur(PILOT_PRICE_CENTS)} (IVA incluido)"
 PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
 PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
 PAYPAL_ENVIRONMENT = os.environ.get("PAYPAL_ENVIRONMENT", "sandbox").strip().lower()

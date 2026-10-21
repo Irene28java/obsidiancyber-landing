@@ -338,14 +338,12 @@ async function loadCommercialStatus() {
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const fmtEUR = (cents) => `${(Number(cents || 0) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-    const totalCents = Number(health.pilot_price_cents || 9559);
-    const baseCents = Number(health.pilot_base_price_cents || 7900);
-    const vatRate = Number(health.vat_rate_percent ?? 21);
+    const totalCents = Number(health.pilot_price_cents || 7900);
     const price = fmtEUR(totalCents);
     payButton.textContent = `Mostrar opciones de pago · ${price} ↗`;
     document.querySelectorAll('.pilot-price, .pilot-price-total').forEach((node) => { node.textContent = price; });
     document.querySelectorAll('.pilot-price-breakdown').forEach((node) => {
-      node.textContent = `${fmtEUR(baseCents)} + IVA (${vatRate} %) = ${price} total`;
+      node.textContent = 'IVA incluido';
     });
     document.querySelectorAll('#cardPayButton').forEach((node) => { node.textContent = `Pagar con tarjeta · ${price}`; });
   } catch (error) {
