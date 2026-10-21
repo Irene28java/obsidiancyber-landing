@@ -96,6 +96,7 @@ function renderReport(data) {
   const headCopy = el('div', 'report-title');
   headCopy.append(el('div', 'eyebrow', data.commercial?.payment_status === 'paid' ? 'OBSIDIAN INTELLIGENCE RECORD / PAID REPORT' : 'OBSIDIAN INTELLIGENCE RECORD / DEFENSIVE'), el('h2', '', 'Ficha de exposición digital'), el('p', 'report-subtitle', `Activo evaluado: ${data.domain}`));
   if (data.commercial?.payment_status === 'paid') headCopy.append(el('span', 'paid-stamp', `PAGO CONFIRMADO · ${data.commercial.amount_eur} €`));
+  if (data.commercial?.domain_control === 'declared') headCopy.append(el('p', 'report-subtitle', 'Control del dominio: declarado por el cliente, no verificado técnicamente (sin registro DNS TXT).'));
   const stamp = el('div', 'report-stamp');
   stamp.append(el('span', '', 'CASE REFERENCE'), el('strong', '', data.case_id), el('span', '', 'DEFENSIVE REVIEW'));
   head.append(headCopy, stamp);
@@ -286,12 +287,19 @@ function showVerification(order) {
   verificationPanel.hidden = false;
   txtNameEl.textContent = order.txt_name;
   txtValueEl.textContent = order.txt_value;
+  const dnsRequired = commercialHealth?.dns_verification_required !== false;
+  verificationPanel.querySelectorAll('.txt-value, .verification-header p').forEach((node) => { node.hidden = !dnsRequired; });
+  verifyDomainButton.hidden = !dnsRequired;
+  const verificationTitle = verificationPanel.querySelector('.verification-header h3');
+  if (verificationTitle) verificationTitle.textContent = dnsRequired ? 'Publica este registro DNS' : 'Solicitud lista para el pago';
   verifyDomainButton.disabled = false;
   payButton.disabled = !order.verified
     || commercialHealth?.payment_enabled !== true
     || !commercialHealth?.paypal_client_id;
   verificationMessage.textContent = order.verified
-    ? 'Dominio verificado. Ya puedes mostrar las opciones de pago seguro.'
+    ? (dnsRequired
+      ? 'Dominio verificado. Ya puedes mostrar las opciones de pago seguro.'
+      : 'Has declarado tener autorización sobre este dominio. Ya puedes mostrar las opciones de pago seguro.')
     : 'Publica el TXT anterior; después vuelve a comprobarlo. No se cobra hasta completar este paso.';
 }
 async function copyText(text) {
@@ -325,16 +333,22 @@ async function loadCommercialStatus() {
       throw new Error('La API health no devolvió un objeto JSON válido');
     }
 
-    const dnsReady = health.dns_txt_verification_ready === true;
+    const dnsRequired = health.dns_verification_required !== false;
+    const dnsReady = health.dns_txt_verification_ready === true || !dnsRequired;
     const paymentReady = health.payment_enabled === true;
     createOrderButton.disabled = !dnsReady;
+    const workspaceIntro = document.querySelector('#workspaceIntro');
+    if (workspaceIntro && !dnsRequired) {
+      workspaceIntro.textContent = 'Indica tu dominio y confirma que tienes autorización para revisarlo. Después podrás elegir un método de pago disponible. El informe se genera y se muestra únicamente cuando el servidor confirma el pago.';
+    }
+    if (!dnsRequired) createOrderButton.textContent = 'Preparar pago ↗';
     checkoutStatus.className = `checkout-status ${paymentReady ? 'ready' : 'not-ready'}`;
     checkoutStatus.textContent = paymentReady
-      ? 'Verifica el control del dominio para continuar. Después podrás elegir un método de pago disponible.'
+      ? (dnsRequired ? 'Verifica el control del dominio para continuar. Después podrás elegir un método de pago disponible.' : 'Confirma la autorización del dominio para continuar. Después podrás elegir un método de pago disponible.')
       : dnsReady
         ? 'Verificación DNS disponible. Los pagos siguen desactivados; no se realizará ningún cobro.'
         : 'Verificación DNS no disponible. Los pagos siguen desactivados; revisa la configuración antes de continuar.';
-    if (paymentReady) setOrderMessage('Prepara la solicitud y confirma el control del dominio para continuar.', 'success');
+    if (paymentReady) setOrderMessage(dnsRequired ? 'Prepara la solicitud y confirma el control del dominio para continuar.' : 'Rellena el formulario y pasa directamente al pago seguro.', 'success');
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const fmtEUR = (cents) => `${(Number(cents || 0) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
@@ -377,16 +391,18 @@ orderForm?.addEventListener('submit', async (event) => {
       terms_acknowledged: termsConsent.checked,
       immediate_delivery_consent: immediateDeliveryConsent.checked
     });
-    order.verified = false;
+    order.verified = order.verified === true;
     localStorage.setItem(`oc-report-token:${order.order_id}`, order.report_access_token);
     sessionStorage.setItem('oc-pending-order', JSON.stringify(order));
     showVerification(order);
-    setOrderMessage(`Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Publica el TXT y verifica el dominio.`, 'success');
+    setOrderMessage(order.verified
+      ? `Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Elige tu método de pago.`
+      : `Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Publica el TXT y verifica el dominio.`, 'success');
     verificationPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (error) {
     setOrderMessage(error.message || 'No se pudo crear la solicitud.', 'error');
   } finally {
-    createOrderButton.textContent = 'Preparar verificación ↗';
+    createOrderButton.textContent = commercialHealth?.dns_verification_required === false ? 'Preparar pago ↗' : 'Preparar verificación ↗';
     await loadCommercialStatus();
   }
 });

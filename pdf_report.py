@@ -106,6 +106,8 @@ def build_paid_report_pdf(report: dict) -> bytes:
         Paragraph(f"Activo evaluado: {escape(_value(domain))}", styles["OC_Subtitle"]),
         Paragraph("PAGO CONFIRMADO · INFORME COMERCIAL", ParagraphStyle("paid", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#087F73"), spaceAfter=9)),
     ])
+    if (report.get("commercial") or {}).get("domain_control") == "declared":
+        story.append(Paragraph("Control del dominio: declarado por el cliente, no verificado técnicamente (sin registro DNS TXT).", styles["OC_Subtitle"]))
     summary_rows = [
         ["Referencia", _value(report.get("case_id")), "Generado", _value(report.get("generated_at"))],
         ["Score de atención TLS", ("—" if report.get("score") is None else f"{report.get('score')}/100"), "Alcance", _value(report.get("scope", "DNS + comprobaciones HTTPS/TLS limitadas"))],

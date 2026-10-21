@@ -455,6 +455,31 @@ class CommercialFlowTests(unittest.TestCase):
         server.DB_PATH = self.old_db
         self.temp_dir.cleanup()
 
+    def test_order_requires_dns_verification_by_default(self):
+        created = server._create_order("example.com", "buyer@example.com", False, immediate_delivery_acknowledged_at="2026-10-21T00:00:00Z")
+        order = server._order_row(created["order_id"])
+        self.assertFalse(created["verified"])
+        self.assertEqual(created["status"], "verification_pending")
+        self.assertFalse(order["verified"])
+        self.assertIsNone(order["domain_control_method"])
+
+    def test_order_can_skip_dns_verification_when_disabled(self):
+        with mock.patch.object(server, "REQUIRE_DNS_VERIFICATION", False):
+            created = server._create_order("example.com", "buyer@example.com", False, immediate_delivery_acknowledged_at="2026-10-21T00:00:00Z")
+        order = server._order_row(created["order_id"])
+        self.assertTrue(created["verified"])
+        self.assertTrue(order["verified"])
+        self.assertEqual(order["domain_control_method"], "declared")
+
+    def test_checkout_ready_without_dnspython_only_when_verification_disabled(self):
+        with mock.patch.object(server, "_paypal_is_configured", return_value=True), \
+             mock.patch.object(server, "COMMERCIAL_TERMS_READY", True), \
+             mock.patch.object(server, "_dns_txt_verification_ready", return_value=False):
+            with mock.patch.object(server, "REQUIRE_DNS_VERIFICATION", True):
+                self.assertFalse(server._commercial_checkout_ready())
+            with mock.patch.object(server, "REQUIRE_DNS_VERIFICATION", False):
+                self.assertTrue(server._commercial_checkout_ready())
+
     def _verified_order(self):
         created = server._create_order("example.com", "buyer@example.com", True)
         conn = server._db_connect()
