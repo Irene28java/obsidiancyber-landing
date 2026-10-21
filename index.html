@@ -12,7 +12,7 @@
 <header class="nav">
   <a class="brand" href="#top" aria-label="ObsidianCyber inicio">◈ OBSIDIAN<span>CYBER</span></a>
   <nav aria-label="Navegación principal">
-    <a href="#capabilities">Capacidades</a><a href="#workflow">Metodología</a><a class="navcta" href="#workspace">Exposure Brief · 79 € ↗</a>
+    <a href="#capabilities">Capacidades</a><a href="#workflow">Metodología</a><a class="navcta" href="#workspace">Exposure Brief · <span class="pilot-price-total">95,59 €</span> ↗</a>
   </nav>
   <button class="menu" aria-label="Abrir menú" aria-expanded="false">☰</button>
 </header>
@@ -62,7 +62,8 @@
       </div>
       <aside class="pilot-card">
         <span class="eyebrow">PILOTO / POR DOMINIO</span>
-        <div class="pilot-price">79 €</div>
+        <div class="pilot-price">95,59 €</div>
+        <p class="pilot-price-breakdown subtle-note">79,00 € + IVA (21 %) = 95,59 € total</p>
         <p>Precio piloto propuesto · sujeto a alcance, impuestos y condiciones finales.</p>
         <a class="button primary" href="#workspace">Solicitar Exposure Brief ↗</a>
         <div id="checkoutStatus" class="checkout-status" role="status">Preparando tu solicitud…</div>
@@ -83,7 +84,8 @@
       <label class="consent"><input id="orderAuth" name="authorized" type="checkbox" required> Confirmo que soy titular del dominio o tengo autorización expresa para esta revisión.</label>
       <label class="consent"><input id="externalIntelConsent" name="externalIntelConsent" type="checkbox"> <strong>Opcional:</strong> autorizo que las IP públicas del informe se consulten en AbuseIPDB si el proveedor está configurado. Se enviarán solo las IP comprobadas dentro del límite indicado. Sus reportes son orientativos, no una prueba concluyente; puedo comprar el informe sin esta consulta.</label>
       <label class="consent"><input id="termsConsent" name="terms" type="checkbox" required> Acepto el alcance limitado del piloto y entiendo que email/brechas, búsquedas web automáticas y dark web no forman parte de este informe.</label>
-      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y el correo de contacto se vinculan al pedido. Las IP públicas solo se envían a un proveedor externo de reputación si la consulta está disponible y la autorizas expresamente. Puedes solicitar el informe sin esa consulta. Consulta la política de privacidad para conocer las finalidades, la conservación de datos y tus derechos. No introduzcas contraseñas ni datos sensibles.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del piloto (borrador)</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad (borrador)</a></p>
+      <label class="consent"><input id="immediateDeliveryConsent" name="immediateDelivery" type="checkbox" required> Solicito expresamente que el informe se genere de inmediato al confirmarse el pago y entiendo que, al ser contenido digital entregado al instante, pierdo mi derecho de desistimiento en ese momento (si compro como consumidor particular).</label>
+      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y el correo de contacto se vinculan al pedido. Las IP públicas solo se envían a un proveedor externo de reputación si la consulta está disponible y la autorizas expresamente. Puedes solicitar el informe sin esa consulta. Consulta la política de privacidad para conocer las finalidades, la conservación de datos y tus derechos. No introduzcas contraseñas ni datos sensibles.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del servicio</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad</a></p>
 <p id="obsidianSupportContact" class="subtle-note">¿Tienes dudas sobre el servicio o tu pedido? Escríbenos a <a href="mailto:obsidiancyber@hotmail.com">obsidiancyber@hotmail.com</a>.</p></div>
       <div id="orderMessage" class="form-message info" role="status" aria-live="polite">Primero verificaremos el control del dominio mediante DNS TXT. Después podrás continuar al pago cuando el pedido esté validado. El informe solo se genera tras la confirmación del pago.</div>
     </form>
@@ -91,7 +93,7 @@
       <div class="verification-header"><span class="eyebrow">VERIFICACIÓN DEL DOMINIO / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>
       <div class="txt-value"><span>Nombre / Host</span><code id="txtName"></code><button class="button copy-button" id="copyTxtName" type="button">Copiar</button></div>
       <div class="txt-value"><span>Valor TXT</span><code id="txtValue"></code><button class="button copy-button" id="copyTxtValue" type="button">Copiar</button></div>
-      <div class="actions verification-actions"><button class="button primary" id="verifyDomainButton" type="button">Comprobar registro TXT ↗</button><button class="button primary" id="payButton" type="button" disabled>Continuar al pago seguro · 79 € ↗</button></div>
+      <div class="actions verification-actions"><button class="button primary" id="verifyDomainButton" type="button">Comprobar registro TXT ↗</button><button class="button primary" id="payButton" type="button" disabled>Continuar al pago seguro · 95,59 € ↗</button></div>
       <div id="inlinePayPalPanel" class="inline-payments" hidden>
         <p id="inlinePaymentMessage" class="subtle-note" role="status" aria-live="polite">
           Selecciona una forma de pago. El informe solo se mostrará tras confirmar el cobro.
@@ -107,7 +109,7 @@
             <div id="card-cvv-field-container" class="card-field"></div>
           </div>
           <button id="cardPayButton" class="button primary" type="button">
-            Pagar con tarjeta · 79 €
+            Pagar con tarjeta · 95,59 €
           </button>
         </div>
       </div>
@@ -134,7 +136,7 @@
       </div>
       <div class="oc-sales-links">
         <a href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a>
-        <a href="#workspace" id="ocSalesOrderLink">Servicio piloto · 79 €</a>
+        <a href="#workspace" id="ocSalesOrderLink">Servicio piloto · <span class="pilot-price-total">95,59 €</span></a>
       </div>
       <form id="ocSalesChatForm" class="oc-sales-form">
         <label class="oc-sales-sr" for="ocSalesChatInput">Tu mensaje</label>

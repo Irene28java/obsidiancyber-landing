@@ -8,6 +8,7 @@ const orderEmail = document.querySelector('#orderEmail');
 const orderAuth = document.querySelector('#orderAuth');
 const externalIntelConsent = document.querySelector('#externalIntelConsent');
 const termsConsent = document.querySelector('#termsConsent');
+const immediateDeliveryConsent = document.querySelector('#immediateDeliveryConsent');
 const createOrderButton = document.querySelector('#createOrderButton');
 const verifyDomainButton = document.querySelector('#verifyDomainButton');
 const payButton = document.querySelector('#payButton');
@@ -336,9 +337,17 @@ async function loadCommercialStatus() {
     if (paymentReady) setOrderMessage('Prepara la solicitud y confirma el control del dominio para continuar.', 'success');
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
-    const price = `${(Number(health.pilot_price_cents || 7900) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+    const fmtEUR = (cents) => `${(Number(cents || 0) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+    const totalCents = Number(health.pilot_price_cents || 9559);
+    const baseCents = Number(health.pilot_base_price_cents || 7900);
+    const vatRate = Number(health.vat_rate_percent ?? 21);
+    const price = fmtEUR(totalCents);
     payButton.textContent = `Mostrar opciones de pago · ${price} ↗`;
-    document.querySelectorAll('.pilot-price').forEach((node) => { node.textContent = price; });
+    document.querySelectorAll('.pilot-price, .pilot-price-total').forEach((node) => { node.textContent = price; });
+    document.querySelectorAll('.pilot-price-breakdown').forEach((node) => {
+      node.textContent = `${fmtEUR(baseCents)} + IVA (${vatRate} %) = ${price} total`;
+    });
+    document.querySelectorAll('#cardPayButton').forEach((node) => { node.textContent = `Pagar con tarjeta · ${price}`; });
   } catch (error) {
     console.error('[ObsidianCyber] Error en loadCommercialStatus:', error);
     if (createOrderButton) createOrderButton.disabled = true;
@@ -355,8 +364,8 @@ async function loadCommercialStatus() {
 orderForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (createOrderButton.disabled) return;
-  if (!orderAuth.checked || !termsConsent.checked) {
-    setOrderMessage('Confirma la autorización del activo y el alcance del piloto para continuar.', 'error');
+  if (!orderAuth.checked || !termsConsent.checked || !immediateDeliveryConsent.checked) {
+    setOrderMessage('Confirma la autorización del activo, el alcance del piloto y la entrega inmediata para continuar.', 'error');
     return;
   }
   createOrderButton.disabled = true;
@@ -367,7 +376,8 @@ orderForm?.addEventListener('submit', async (event) => {
       email: orderEmail.value.trim(),
       authorized: true,
       external_intel_consent: externalIntelConsent.checked,
-      terms_acknowledged: termsConsent.checked
+      terms_acknowledged: termsConsent.checked,
+      immediate_delivery_consent: immediateDeliveryConsent.checked
     });
     order.verified = false;
     localStorage.setItem(`oc-report-token:${order.order_id}`, order.report_access_token);

@@ -278,8 +278,12 @@ class ApiSmokeTests(unittest.TestCase):
             self.assertIn('TODOS LOS RESULTADOS SON FICTICIOS', sample)
             terms = urlopen(self.base + '/terms.html', timeout=3).read().decode('utf-8')
             privacy = urlopen(self.base + '/privacy.html', timeout=3).read().decode('utf-8')
-            self.assertIn('BORRADOR', terms)
-            self.assertIn('BORRADOR', privacy)
+            for doc in (terms, privacy):
+                self.assertNotIn('BORRADOR', doc)
+                self.assertNotIn('COMPLETAR', doc)
+                self.assertNotIn('[NOMBRE LEGAL', doc)
+            self.assertIn('Irene Vaquerizo', terms)
+            self.assertIn('95,59', terms)
 
     def test_private_project_files_are_not_served(self):
         for path in ('/server.py', '/.env.example', '/README.md', '/tests/test_server.py'):
@@ -340,6 +344,7 @@ class ApiSmokeTests(unittest.TestCase):
         payload = {
             'domain': 'example.com', 'email': 'buyer@example.com',
             'authorized': True, 'terms_acknowledged': True,
+            'immediate_delivery_consent': True,
             'external_intel_consent': False
         }
         request = Request(self.base + '/api/orders', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'}, method='POST')
@@ -361,9 +366,32 @@ class ApiSmokeTests(unittest.TestCase):
                         kwargs.get('terms_acknowledged_at'),
                         kwargs.get('authorization_acknowledged_at'),
                     )
-                    self.assertEqual(kwargs.get('terms_version'), 'pilot-v1-draft')
+                    self.assertEqual(kwargs.get('terms_version'), 'pilot-v2-2026-10')
+                    self.assertEqual(
+                        kwargs.get('immediate_delivery_acknowledged_at'),
+                        kwargs.get('authorization_acknowledged_at'),
+                    )
                 finally:
                     server.DB_PATH = old_db
+
+    def test_order_rejected_without_immediate_delivery_consent(self):
+        payload = {
+            'domain': 'example.com', 'email': 'buyer@example.com',
+            'authorized': True, 'terms_acknowledged': True,
+            'external_intel_consent': False
+        }
+        request = Request(self.base + '/api/orders', data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'}, method='POST')
+        with mock.patch.object(server, '_commercial_checkout_ready', return_value=True), \
+             mock.patch.object(server, '_create_order') as create_order:
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(request, timeout=3)
+            self.assertEqual(ctx.exception.code, 403)
+            create_order.assert_not_called()
+
+    def test_default_price_is_base_plus_vat(self):
+        self.assertEqual(server.PILOT_BASE_PRICE_CENTS, 7900)
+        self.assertEqual(server.PILOT_PRICE_CENTS, 9559)
+        self.assertIn('95,59 €', server._price_text())
 
 
 class IntelligenceTests(unittest.TestCase):
@@ -489,8 +517,8 @@ class CommercialFlowTests(unittest.TestCase):
             "id": payment_id, "status": "COMPLETED",
             "purchase_units": [{
                 "reference_id": created["order_id"], "custom_id": created["order_id"],
-                "amount": {"currency_code": "EUR", "value": "79.00"},
-                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": "79.00"}}]},
+                "amount": {"currency_code": "EUR", "value": f"{server.PILOT_PRICE_CENTS / 100:.2f}"},
+                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": f"{server.PILOT_PRICE_CENTS / 100:.2f}"}}]},
             }],
         }
         fake_report = {"case_id": "OC-TEST-REPORT", "domain": "example.com", "timeline": [], "score": 0}
@@ -519,8 +547,8 @@ class CommercialFlowTests(unittest.TestCase):
             "id": payment_id, "status": "COMPLETED",
             "purchase_units": [{
                 "reference_id": created["order_id"], "custom_id": created["order_id"],
-                "amount": {"currency_code": "EUR", "value": "79.00"},
-                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": "79.00"}}]},
+                "amount": {"currency_code": "EUR", "value": f"{server.PILOT_PRICE_CENTS / 100:.2f}"},
+                "payments": {"captures": [{"status": "COMPLETED", "amount": {"currency_code": "EUR", "value": f"{server.PILOT_PRICE_CENTS / 100:.2f}"}}]},
             }],
         }
         fake_report = {"case_id": "OC-TEST-CONCURRENT", "domain": "example.com", "timeline": [], "score": 0}
@@ -566,7 +594,7 @@ class CommercialFlowTests(unittest.TestCase):
             "id": payment_id, "status": "APPROVED",
             "purchase_units": [{
                 "reference_id": created["order_id"], "custom_id": created["order_id"],
-                "amount": {"currency_code": "EUR", "value": "79.00"},
+                "amount": {"currency_code": "EUR", "value": f"{server.PILOT_PRICE_CENTS / 100:.2f}"},
             }],
         }
         with mock.patch.object(server, "_commercial_checkout_ready", return_value=True), \
