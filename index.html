@@ -118,6 +118,25 @@
     <div id="report" class="report" hidden aria-live="polite"></div>
   </section>
 
+  <section id="contacto" class="section wrap lead-section">
+    <div class="eyebrow">CONTACTO / 04</div><h2>¿Dudas antes de <em>pedir tu informe?</em></h2>
+    <p class="intro">Déjanos tu correo y te respondemos personalmente. Sin compromiso de compra.</p>
+    <form id="leadForm" novalidate>
+      <label for="leadEmail">Correo de contacto</label>
+      <input id="leadEmail" name="email" type="email" placeholder="tu@empresa.com" autocomplete="email" required maxlength="254">
+      <label for="leadName">Nombre (opcional)</label>
+      <input id="leadName" name="name" type="text" placeholder="Tu nombre" autocomplete="name" maxlength="100">
+      <label for="leadCompany">Empresa o web (opcional)</label>
+      <input id="leadCompany" name="company" type="text" placeholder="tuempresa.com" autocomplete="organization" maxlength="160">
+      <label for="leadMessage">¿Qué te gustaría saber? (opcional)</label>
+      <textarea id="leadMessage" name="message" maxlength="1000" placeholder="Cuéntanos qué dominio te preocupa o qué quieres comprobar"></textarea>
+      <div class="hp-field" aria-hidden="true"><label for="leadHp">No rellenar</label><input id="leadHp" name="company_website_hp" type="text" tabindex="-1" autocomplete="off"></div>
+      <label class="consent"><input id="leadConsent" name="consent" type="checkbox" required><span>Acepto que ObsidianCyber use mi correo para responderme y enviarme información sobre sus servicios. Puedo darme de baja en cualquier momento escribiendo a obsidiancyber@hotmail.com. Más información en la <a href="privacy.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>.</span></label>
+      <div class="actions"><button id="leadSubmit" class="button primary" type="submit">Quiero que me contactéis ↗</button></div>
+      <div id="leadMessageBox" class="form-message info" role="status" aria-live="polite" hidden></div>
+    </form>
+  </section>
+
   <section class="closing wrap"><div><div class="eyebrow">OBSIDIAN CYBER</div><h2>Look deeper.<br><em>Defend smarter.</em></h2><p class="closing-note">Evidence first. Claims only when verified.</p></div><a class="button" href="#top">Volver arriba ↑</a></section>
 </main>
 <footer class="footer"><a class="brand" href="#top">◈ OBSIDIAN<span>CYBER</span></a><small>© <span id="year"></span> ObsidianCyber · Piloto defensivo · funcionalidades indicadas por cobertura</small><small>OBSERVE · CORRELATE · PRIORITIZE</small></footer>
@@ -136,6 +155,7 @@
       </div>
       <div class="oc-sales-links">
         <a href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a>
+        <a href="#contacto" id="ocSalesContactLink">Hablar con una persona</a>
         <a href="#workspace" id="ocSalesOrderLink">Servicio piloto · <span class="pilot-price-total">79,00 €</span></a>
       </div>
       <form id="ocSalesChatForm" class="oc-sales-form">

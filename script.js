@@ -821,3 +821,39 @@ void init();
   });
 })();
 // END OC_SALES_CHAT_CLIENT_V1
+
+
+// Formulario de leads con consentimiento (RGPD): solo se envía si la casilla está marcada.
+(() => {
+  const form = document.querySelector('#leadForm');
+  if (!form) return;
+  const box = document.querySelector('#leadMessageBox');
+  const submit = document.querySelector('#leadSubmit');
+  const show = (text, type) => { box.hidden = false; box.className = `form-message ${type}`; box.textContent = text; };
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = document.querySelector('#leadEmail').value.trim();
+    if (!email || !document.querySelector('#leadConsent').checked) {
+      show('Escribe tu correo y marca la casilla de consentimiento para que podamos contactarte.', 'error');
+      return;
+    }
+    submit.disabled = true;
+    try {
+      await postJson('/api/leads', {
+        email,
+        name: document.querySelector('#leadName').value,
+        company: document.querySelector('#leadCompany').value,
+        message: document.querySelector('#leadMessage').value,
+        company_website_hp: document.querySelector('#leadHp').value,
+        consent: true,
+        source: 'web'
+      });
+      form.reset();
+      show('Recibido. Te escribiremos a ese correo lo antes posible.', 'success');
+    } catch (error) {
+      show(error.message || 'No se pudo enviar. Escríbenos a obsidiancyber@hotmail.com.', 'error');
+    } finally {
+      submit.disabled = false;
+    }
+  });
+})();

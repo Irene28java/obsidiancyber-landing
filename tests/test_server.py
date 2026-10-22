@@ -261,6 +261,93 @@ class ApiSmokeTests(unittest.TestCase):
         self.assertEqual(paypal_mock.call_count, 2)
 
 
+    def _post_json(self, path, payload, headers=None):
+        request = Request(self.base + path, data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json', **(headers or {})}, method='POST')
+        try:
+            with urlopen(request, timeout=3) as response:
+                return response.status, json.loads(response.read().decode())
+        except HTTPError as exc:
+            return exc.code, json.loads(exc.read().decode())
+
+    def _leads_db(self):
+        old_db = server.DB_PATH
+        temp_dir = tempfile.TemporaryDirectory()
+        server.DB_PATH = Path(temp_dir.name) / 'leads.sqlite3'
+        self.addCleanup(temp_dir.cleanup)
+        self.addCleanup(setattr, server, 'DB_PATH', old_db)
+
+    def test_lead_requires_consent_and_valid_email(self):
+        self._leads_db()
+        status, _ = self._post_json('/api/leads', {'email': 'a@b.com', 'consent': False})
+        self.assertEqual(status, 403)
+        status, _ = self._post_json('/api/leads', {'email': 'no-es-correo', 'consent': True})
+        self.assertEqual(status, 422)
+
+    def test_lead_honeypot_is_not_stored(self):
+        self._leads_db()
+        status, body = self._post_json('/api/leads', {'email': 'bot@spam.com', 'consent': True, 'company_website_hp': 'http://spam'})
+        self.assertEqual(status, 200)
+        conn = server._db_connect()
+        try:
+            self.assertEqual(conn.execute('SELECT COUNT(*) AS n FROM leads').fetchone()['n'], 0)
+        finally:
+            conn.close()
+
+    def test_lead_is_stored_with_consent_and_deduplicated(self):
+        self._leads_db()
+        status, body = self._post_json('/api/leads', {'email': 'Ana@Agencia.es', 'name': 'Ana', 'consent': True, 'message': 'hola'})
+        self.assertEqual((status, body['status']), (201, 'received'))
+        status, _ = self._post_json('/api/leads', {'email': 'ana@agencia.es', 'company': 'Agencia', 'consent': True})
+        self.assertEqual(status, 201)
+        conn = server._db_connect()
+        try:
+            rows = conn.execute('SELECT * FROM leads').fetchall()
+        finally:
+            conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['name'], 'Ana')
+        self.assertEqual(rows[0]['company'], 'Agencia')
+        self.assertEqual(rows[0]['consent_version'], server.LEAD_CONSENT_VERSION)
+        self.assertTrue(rows[0]['consent_at'])
+
+    def test_lead_rejects_oversized_fields(self):
+        self._leads_db()
+        status, _ = self._post_json('/api/leads', {'email': 'a@b.com', 'consent': True, 'name': 'x' * 101})
+        self.assertEqual(status, 422)
+
+    def test_admin_leads_export_is_protected(self):
+        self._leads_db()
+        self._post_json('/api/leads', {'email': 'ana@agencia.es', 'name': '=SUMA(1)', 'consent': True})
+        def get(headers=None):
+            try:
+                with urlopen(Request(self.base + '/api/admin/leads?format=csv', headers=headers or {}), timeout=3) as r:
+                    return r.status, r.read().decode()
+            except HTTPError as exc:
+                return exc.code, exc.read().decode()
+        with mock.patch.object(server, 'ADMIN_TOKEN', ''):
+            self.assertEqual(get({'Authorization': 'Bearer x'})[0], 404)
+        with mock.patch.object(server, 'ADMIN_TOKEN', 'secreto-largo-de-prueba'):
+            self.assertEqual(get()[0], 401)
+            self.assertEqual(get({'Authorization': 'Bearer otro'})[0], 401)
+            status, text = get({'Authorization': 'Bearer secreto-largo-de-prueba'})
+            self.assertEqual(status, 200)
+            self.assertIn('ana@agencia.es', text)
+            self.assertNotIn(',=SUMA', text)  # neutraliza inyección de fórmulas en hojas de cálculo
+
+    def test_admin_unsubscribe_marks_lead(self):
+        self._leads_db()
+        self._post_json('/api/leads', {'email': 'ana@agencia.es', 'consent': True})
+        with mock.patch.object(server, 'ADMIN_TOKEN', 'secreto-largo-de-prueba'):
+            status, _ = self._post_json('/api/admin/leads/unsubscribe', {'email': 'ana@agencia.es'}, {'Authorization': 'Bearer secreto-largo-de-prueba'})
+            self.assertEqual(status, 200)
+            status, _ = self._post_json('/api/admin/leads/unsubscribe', {'email': 'ana@agencia.es'}, {'Authorization': 'Bearer mal'})
+            self.assertEqual(status, 401)
+        conn = server._db_connect()
+        try:
+            self.assertTrue(conn.execute('SELECT unsubscribed_at FROM leads').fetchone()['unsubscribed_at'])
+        finally:
+            conn.close()
+
     def test_health(self):
         with urlopen(f'{self.base}/api/health', timeout=3) as response:
             data = json.loads(response.read().decode())

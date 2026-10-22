@@ -197,3 +197,11 @@ button:disabled{opacity:.65;cursor:wait}.capability-grid article{display:flex;fl
     gap: .2rem;
   }
 }
+
+#leadForm{max-width:900px}
+#leadForm input[type=email],#leadForm input[type=text],#leadForm textarea{display:block;width:100%;margin:7px 0 16px;padding:13px 14px;background:#050b10;border:1px solid #29434b;color:#effafa;font:13px 'DM Mono',monospace}
+#leadForm textarea{min-height:96px;resize:vertical}
+#leadForm .consent input{width:auto;margin:0}
+.hp-field{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
+.lead-section{scroll-margin-top:24px}
+@media print{#contacto{display:none!important}}

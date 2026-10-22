@@ -63,6 +63,20 @@ _load_dotenv_file()
 HOST = os.environ.get("OBSIDIAN_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", os.environ.get("OBSIDIAN_PORT", "8000")))
 MAX_BODY = 8 * 1024
+LEAD_CONSENT_VERSION = "leads-v1-2026-10"
+ADMIN_TOKEN = os.environ.get("OBSIDIAN_ADMIN_TOKEN", "").strip()
+LEADS_TABLE_SQL = """CREATE TABLE IF NOT EXISTS leads (
+    lead_id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    name TEXT,
+    company TEXT,
+    message TEXT,
+    source TEXT,
+    consent_at TEXT NOT NULL,
+    consent_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    unsubscribed_at TEXT
+)"""
 MAX_IPS = 16
 MAX_TLS_IP_CHECKS = 4
 MAX_REPUTATION_CHECKS = 4
@@ -387,6 +401,7 @@ def _db_connect():
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS domain_control_method TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS terms_version TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
+        conn.execute(LEADS_TABLE_SQL)
         conn.commit()
         return _PostgresCompatConnection(conn)
 
@@ -428,12 +443,59 @@ def _db_connect():
     if "domain_control_method" not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN domain_control_method TEXT")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
+    conn.execute(LEADS_TABLE_SQL)
     conn.commit()
     try:
         os.chmod(DB_PATH, 0o600)
     except OSError:
         pass
     return conn
+
+
+_EMAIL_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+
+
+def _clean_text(value, max_len: int):
+    """Normaliza texto libre: None/vacío -> None; ValueError si no es texto o es demasiado largo."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Campo de texto no válido.")
+    value = " ".join(value.split())
+    if len(value) > max_len:
+        raise ValueError("Un campo supera la longitud permitida.")
+    return value or None
+
+
+def _save_lead(email: str, name, company, message, source) -> None:
+    """Guarda (o actualiza) un lead con consentimiento. No revela si el correo ya existía."""
+    now = iso_utc()
+    conn = _db_connect()
+    try:
+        row = conn.execute("SELECT lead_id FROM leads WHERE lower(email) = lower(?)", (email,)).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE leads SET name = COALESCE(?, name), company = COALESCE(?, company), "
+                "message = COALESCE(?, message), consent_at = ?, consent_version = ?, unsubscribed_at = NULL "
+                "WHERE lead_id = ?",
+                (name, company, message, now, LEAD_CONSENT_VERSION, row["lead_id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO leads (lead_id, email, name, company, message, source, consent_at, consent_version, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("OC-LEAD-" + secrets.token_hex(6).upper(), email, name, company, message, source, now, LEAD_CONSENT_VERSION, now),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _admin_authorized(headers) -> bool:
+    if not ADMIN_TOKEN:
+        return False
+    supplied = (headers.get("Authorization", "") or "").removeprefix("Bearer ").strip()
+    return bool(supplied) and hmac.compare_digest(supplied.encode(), ADMIN_TOKEN.encode())
 
 
 def _purge_expired_orders(conn: sqlite3.Connection) -> None:
@@ -1320,6 +1382,39 @@ class Handler(SimpleHTTPRequestHandler):
                 "vat_rate_percent": float(VAT_RATE_PERCENT),
                 "report_retention_days": REPORT_RETENTION_DAYS,
             })
+        if path == "/api/admin/leads":
+            if not ADMIN_TOKEN:
+                return self._json(404, {"error": "Endpoint no encontrado."})
+            if not self._rate_allowed():
+                return self._json(429, {"error": "Límite de solicitudes local alcanzado; espera un minuto."})
+            if not _admin_authorized(self.headers):
+                return self._json(401, {"error": "No autorizado."})
+            conn = _db_connect()
+            try:
+                rows = [dict(r) for r in conn.execute(
+                    "SELECT lead_id, email, name, company, message, source, consent_at, consent_version, created_at, unsubscribed_at "
+                    "FROM leads ORDER BY created_at DESC"
+                ).fetchall()]
+            finally:
+                conn.close()
+            if parse_qs(parsed.query).get("format", [""])[0] == "csv":
+                import csv, io
+                buf = io.StringIO()
+                fields = ["lead_id", "email", "name", "company", "message", "source", "consent_at", "consent_version", "created_at", "unsubscribed_at"]
+                writer = csv.DictWriter(buf, fieldnames=fields)
+                writer.writeheader()
+                for r in rows:
+                    writer.writerow({k: ("'" + str(v) if isinstance(v, str) and v[:1] in "=+-@" else v) for k, v in r.items()})
+                data = buf.getvalue().encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", "attachment; filename=leads.csv")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            return self._json(200, {"count": len(rows), "leads": rows})
         if path == "/api/paid-report-pdf":
             if not self._rate_allowed():
                 return self._json(429, {"error": "Límite de solicitudes local alcanzado; espera un minuto."})
@@ -1503,7 +1598,7 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/paypal/webhook":
             return self._handle_paypal_webhook()
-        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/paypal/capture", "/api/sales-chat"}:
+        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/paypal/capture", "/api/sales-chat", "/api/leads", "/api/admin/leads/unsubscribe"}:
             return self._json(404, {"error": "Endpoint no encontrado."})
         if not self._origin_allowed():
             return self._json(403, {"error": "Origen no permitido."})
@@ -1513,6 +1608,45 @@ class Handler(SimpleHTTPRequestHandler):
         if error:
             return self._json(error[0], error[1])
 
+
+        if path == "/api/leads":
+            # Campo trampa: los humanos no lo ven; si viene relleno es un bot. Respuesta idéntica, sin guardar.
+            if payload.get("company_website_hp"):
+                return self._json(200, {"status": "received"})
+            if payload.get("consent") is not True:
+                return self._json(403, {"error": "Marca la casilla de consentimiento para que podamos contactarte."})
+            email = payload.get("email")
+            if not isinstance(email, str) or len(email) > 254 or not _EMAIL_RE.fullmatch(email.strip()):
+                return self._json(422, {"error": "Introduce una dirección de correo válida."})
+            try:
+                name = _clean_text(payload.get("name"), 100)
+                company = _clean_text(payload.get("company"), 160)
+                message = _clean_text(payload.get("message"), 1000)
+                source = _clean_text(payload.get("source"), 40) or "web"
+            except ValueError as exc:
+                return self._json(422, {"error": str(exc)})
+            try:
+                _save_lead(email.strip(), name, company, message, source)
+            except Exception:
+                traceback.print_exc(file=sys.stderr)
+                return self._json(500, {"error": "No se pudo guardar tu solicitud. Escríbenos a obsidiancyber@hotmail.com."})
+            return self._json(201, {"status": "received"})
+
+        if path == "/api/admin/leads/unsubscribe":
+            if not ADMIN_TOKEN:
+                return self._json(404, {"error": "Endpoint no encontrado."})
+            if not _admin_authorized(self.headers):
+                return self._json(401, {"error": "No autorizado."})
+            email = payload.get("email")
+            if not isinstance(email, str) or not _EMAIL_RE.fullmatch(email.strip()):
+                return self._json(422, {"error": "Correo no válido."})
+            conn = _db_connect()
+            try:
+                conn.execute("UPDATE leads SET unsubscribed_at = ? WHERE lower(email) = lower(?)", (iso_utc(), email.strip()))
+                conn.commit()
+            finally:
+                conn.close()
+            return self._json(200, {"status": "unsubscribed"})
 
         if path == "/api/paypal/capture":
             payment_id = payload.get("payment_id")
