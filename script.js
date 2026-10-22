@@ -344,11 +344,11 @@ async function loadCommercialStatus() {
     if (!dnsRequired) createOrderButton.textContent = 'Preparar pago ↗';
     checkoutStatus.className = `checkout-status ${paymentReady ? 'ready' : 'not-ready'}`;
     checkoutStatus.textContent = paymentReady
-      ? (dnsRequired ? 'Verifica el control del dominio para continuar. Después podrás elegir un método de pago disponible.' : 'Confirma la autorización del dominio para continuar. Después podrás elegir un método de pago disponible.')
+      ? (dnsRequired ? '3 pasos: indica tu dominio, publica un registro TXT (unos 2 minutos) y paga con tarjeta o PayPal. El informe aparece al momento.' : 'Confirma la autorización del dominio para continuar. Después podrás elegir un método de pago disponible.')
       : dnsReady
         ? 'Verificación DNS disponible. Los pagos siguen desactivados; no se realizará ningún cobro.'
         : 'Verificación DNS no disponible. Los pagos siguen desactivados; revisa la configuración antes de continuar.';
-    if (paymentReady) setOrderMessage(dnsRequired ? 'Prepara la solicitud y confirma el control del dominio para continuar.' : 'Rellena el formulario y pasa directamente al pago seguro.', 'success');
+    if (paymentReady) setOrderMessage(dnsRequired ? 'Rellena el formulario. En el siguiente paso te daremos el registro TXT que demuestra que el dominio es tuyo; después podrás pagar.' : 'Rellena el formulario y pasa directamente al pago seguro.', 'success');
     else if (dnsReady) setOrderMessage('Puedes preparar una solicitud y verificar el dominio. No se cobrará nada mientras los pagos sigan desactivados.', 'info');
     else setOrderMessage('La verificación DNS aún no está disponible. No se crea ni cobra ningún pedido.', 'info');
     const fmtEUR = (cents) => `${(Number(cents || 0) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
