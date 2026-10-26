@@ -232,7 +232,14 @@ class ApiSmokeTests(unittest.TestCase):
         }
         select_conn = mock.Mock()
         select_conn.execute.return_value.fetchone.return_value = order_row
+
         update_conn = mock.Mock()
+        update_conn.execute.return_value.rowcount = 1
+
+        delivery_conn = mock.Mock()
+        delivery_conn.execute.return_value.fetchone.return_value = {
+            "report_email_status": "sent"
+        }
 
         with mock.patch.object(
             server, "PAYPAL_WEBHOOK_ID", "WH-LOCAL-TEST"
@@ -245,10 +252,16 @@ class ApiSmokeTests(unittest.TestCase):
             ],
         ) as paypal_mock, mock.patch.object(
             server, "_db_connect",
-            side_effect=[select_conn, update_conn],
+            side_effect=[select_conn, update_conn, delivery_conn],
         ), mock.patch.object(
             server, "_paypal_order_paid", return_value=True
-        ) as paid_mock:
+        ) as paid_mock, mock.patch.object(
+            server, "_notify_paid_order"
+        ) as notify_mock, mock.patch.object(
+            server,
+            "_paid_report",
+            return_value=(200, {"status": "ready", "report": {}}),
+        ) as report_mock:
             status, payload = self._post_webhook(event)
 
         self.assertEqual(status, 200)
@@ -258,6 +271,9 @@ class ApiSmokeTests(unittest.TestCase):
         update_conn.commit.assert_called_once()
         update_conn.close.assert_called_once()
         paid_mock.assert_called_once()
+        notify_mock.assert_called_once()
+        report_mock.assert_called_once_with(payment_id, "", internal=True)
+        delivery_conn.close.assert_called_once()
         self.assertEqual(paypal_mock.call_count, 2)
 
 
