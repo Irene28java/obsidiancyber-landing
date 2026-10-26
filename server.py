@@ -451,7 +451,10 @@ def _db_connect():
             paypal_order_id TEXT,
             price_cents INTEGER NOT NULL,
             report_json TEXT,
-            report_generated_at TEXT
+            report_generated_at TEXT,
+            report_email_status TEXT NOT NULL DEFAULT 'pending',
+            report_email_sent_at TEXT,
+            report_email_attempted_at TEXT
         )""")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS paypal_order_id TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS authorization_acknowledged_at TEXT")
@@ -459,6 +462,9 @@ def _db_connect():
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS immediate_delivery_acknowledged_at TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS domain_control_method TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS terms_version TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS report_email_status TEXT NOT NULL DEFAULT 'pending'")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS report_email_sent_at TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS report_email_attempted_at TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
         conn.execute(LEADS_TABLE_SQL)
         conn.commit()
@@ -486,7 +492,10 @@ def _db_connect():
         paypal_order_id TEXT,
         price_cents INTEGER NOT NULL,
         report_json TEXT,
-        report_generated_at TEXT
+        report_generated_at TEXT,
+        report_email_status TEXT NOT NULL DEFAULT 'pending',
+        report_email_sent_at TEXT,
+        report_email_attempted_at TEXT
     )""")
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
     if "paypal_order_id" not in columns:
@@ -501,6 +510,12 @@ def _db_connect():
         conn.execute("ALTER TABLE orders ADD COLUMN immediate_delivery_acknowledged_at TEXT")
     if "domain_control_method" not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN domain_control_method TEXT")
+    if "report_email_status" not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN report_email_status TEXT NOT NULL DEFAULT 'pending'")
+    if "report_email_sent_at" not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN report_email_sent_at TEXT")
+    if "report_email_attempted_at" not in columns:
+        conn.execute("ALTER TABLE orders ADD COLUMN report_email_attempted_at TEXT")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
     conn.execute(LEADS_TABLE_SQL)
     conn.commit()
@@ -885,7 +900,141 @@ def _capture_paypal_order(payment_id: str, access_token: str) -> tuple[int, dict
     return 200, {"status": "paid", "payment_id": payment_id}
 
 
-def _paid_report(payment_id: str, access_token: str) -> tuple[int, dict]:
+
+
+def _send_paid_report_email(order: dict, report: dict) -> bool:
+    """Envía el PDF al comprador y registra el resultado del envío."""
+    import base64
+
+    order_id = str(order.get("order_id") or "").strip()
+    recipient = str(order.get("email") or "").strip()
+    domain = str(order.get("domain") or "").strip()
+    api_key = os.environ.get("BREVO_API_KEY", "").strip()
+    sender = os.environ.get(
+        "BREVO_SENDER_EMAIL", "obsidiancyber@hotmail.com"
+    ).strip()
+
+    if not order_id or not recipient or not domain or not api_key or not sender:
+        sys.stderr.write(
+            "Entrega PDF pendiente: faltan datos del pedido o configuración de Brevo.\n"
+        )
+        return False
+
+    attempted_at = iso_utc()
+    stale_before = iso_utc(utc_now() - dt.timedelta(minutes=15))
+
+    # Una reserva evita envíos simultáneos del mismo informe.
+    conn = _db_connect()
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE orders
+            SET report_email_status = 'sending',
+                report_email_attempted_at = ?
+            WHERE order_id = ?
+              AND report_json IS NOT NULL
+              AND report_email_sent_at IS NULL
+              AND (
+                  report_email_status IN ('pending', 'failed')
+                  OR (
+                      report_email_status = 'sending'
+                      AND report_email_attempted_at < ?
+                  )
+              )
+            """,
+            (attempted_at, order_id, stale_before),
+        )
+        conn.commit()
+        claimed = cursor.rowcount == 1
+    finally:
+        conn.close()
+
+    if not claimed:
+        return False
+
+    error_code = None
+    try:
+        from pdf_report import build_paid_report_pdf
+        pdf_bytes = build_paid_report_pdf(report)
+
+        if not pdf_bytes:
+            raise RuntimeError("PDF vacío")
+
+        message = {
+            "sender": {"name": "ObsidianCyber", "email": sender},
+            "to": [{"email": recipient}],
+            "subject": f"Tu Exposure Brief de {domain}"[:150],
+            "textContent": (
+                f"Hola,\n\nAdjuntamos tu Exposure Brief para {domain}.\n"
+                f"Referencia del pedido: {order_id}\n"
+                f"Importe: {_eur(int(order.get('price_cents') or 0))}\n\n"
+                "El informe tiene el alcance técnico indicado en la oferta; "
+                "no sustituye una auditoría integral.\n\n"
+                "Gracias por confiar en ObsidianCyber."
+            ),
+            "attachment": [{
+                "name": "ObsidianCyber-Exposure-Brief.pdf",
+                "content": base64.b64encode(pdf_bytes).decode("ascii"),
+            }],
+        }
+
+        request = Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=json.dumps(message).encode("utf-8"),
+            headers={
+                "accept": "application/json",
+                "api-key": api_key,
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+
+        with urlopen(request, timeout=20) as response:
+            if not 200 <= response.status < 300:
+                error_code = f"HTTP_{response.status}"
+
+    except HTTPError as exc:
+        error_code = f"HTTP_{exc.code}"
+    except Exception as exc:
+        error_code = type(exc).__name__
+
+    conn = _db_connect()
+    try:
+        if error_code is None:
+            conn.execute(
+                """
+                UPDATE orders
+                SET report_email_status = 'sent',
+                    report_email_sent_at = ?
+                WHERE order_id = ?
+                  AND report_email_status = 'sending'
+                  AND report_email_attempted_at = ?
+                """,
+                (iso_utc(), order_id, attempted_at),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE orders SET report_email_status = 'failed'
+                WHERE order_id = ?
+                  AND report_email_status = 'sending'
+                  AND report_email_attempted_at = ?
+                """,
+                (order_id, attempted_at),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    if error_code:
+        sys.stderr.write(
+            f"Falló el envío del PDF ({error_code}); pedido {order_id}.\n"
+        )
+        return False
+
+    return True
+
+def _paid_report(payment_id: str, access_token: str, *, internal: bool = False) -> tuple[int, dict]:
     if not isinstance(payment_id, str) or not re.fullmatch(r"[A-Z0-9]{1,36}", payment_id):
         return 400, {"error": "Identificador de orden PayPal no válido."}
     conn = _db_connect()
@@ -894,9 +1043,13 @@ def _paid_report(payment_id: str, access_token: str) -> tuple[int, dict]:
         order = conn.execute("SELECT * FROM orders WHERE paypal_order_id = ?", (payment_id,)).fetchone()
         if not order:
             return 404, {"error": "No se encontró un pedido asociado a esta orden PayPal."}
-        supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
-        if not access_token or not hmac.compare_digest(supplied_hash, str(order["access_token_hash"])):
-            return 403, {"error": "Token de acceso al informe no válido."}
+        if internal:
+            if order["status"] not in {"payment_pending", "paid", "report_generating", "report_ready"}:
+                return 403, {"error": "El pedido no está confirmado como pagado."}
+        else:
+            supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
+            if not access_token or not hmac.compare_digest(supplied_hash, str(order["access_token_hash"])):
+                return 403, {"error": "Token de acceso al informe no válido."}
         if not order["verified"]:
             return 403, {"error": "El control del dominio no está verificado."}
         existing_report = order["report_json"]
@@ -913,6 +1066,7 @@ def _paid_report(payment_id: str, access_token: str) -> tuple[int, dict]:
         return 402, {"error": "No se ha podido verificar que PayPal capturase el importe y la moneda esperados."}
     if existing_report:
         result = json.loads(existing_report)
+        _send_paid_report_email(order_dict, result)
         return 200, {"status": "ready", "report": result}
 
     # Reserva atómica: evita que dos peticiones generen el mismo informe.
@@ -1034,9 +1188,11 @@ def _paid_report(payment_id: str, access_token: str) -> tuple[int, dict]:
         conn.close()
 
     if saved_report:
+        ready_report = json.loads(saved_report)
+        _send_paid_report_email(order_dict, ready_report)
         return 200, {
             "status": "ready",
-            "report": json.loads(saved_report),
+            "report": ready_report,
         }
 
     # La reserva pudo expirar mientras se calculaba el informe.
@@ -1651,6 +1807,42 @@ class Handler(SimpleHTTPRequestHandler):
 
                             if changed:
                                 _notify_paid_order(order, payment_id)
+
+                            report_http, report_result = _paid_report(
+                                payment_id, "", internal=True
+                            )
+                            if (
+                                report_http != 200
+                                or not isinstance(report_result, dict)
+                                or report_result.get("status") != "ready"
+                            ):
+                                self.log_error(
+                                    "Pedido pagado; generación pendiente (HTTP %s).",
+                                    report_http,
+                                )
+                                return self._json(
+                                    503,
+                                    {"error": "Pago confirmado; informe pendiente de reintento."},
+                                )
+
+                            delivery_conn = _db_connect()
+                            try:
+                                delivery = delivery_conn.execute(
+                                    "SELECT report_email_status FROM orders "
+                                    "WHERE paypal_order_id = ?",
+                                    (payment_id,),
+                                ).fetchone()
+                            finally:
+                                delivery_conn.close()
+
+                            if not delivery or delivery["report_email_status"] != "sent":
+                                self.log_error(
+                                    "Pedido pagado; envío de informe pendiente."
+                                )
+                                return self._json(
+                                    503,
+                                    {"error": "Pago confirmado; envío del informe pendiente de reintento."},
+                                )
                 except Exception as exc:
                     self.log_error(
                         "Error procesando webhook PayPal: %s",
