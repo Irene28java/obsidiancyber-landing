@@ -160,6 +160,11 @@ PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
 PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
 PAYPAL_ENVIRONMENT = os.environ.get("PAYPAL_ENVIRONMENT", "sandbox").strip().lower()
 PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID", "").strip()
+TELEGRAM_STARS_SECRET = os.environ.get("OBSIDIAN_TELEGRAM_STARS_SECRET", "").strip()
+try:
+    TELEGRAM_STARS_PRICE = int(os.environ.get("OBSIDIAN_TELEGRAM_STARS_PRICE", "0"))
+except ValueError:
+    TELEGRAM_STARS_PRICE = 0
 PUBLIC_BASE_URL = os.environ.get("OBSIDIAN_PUBLIC_BASE_URL", "").strip().rstrip("/")
 ABUSEIPDB_API_KEY = os.environ.get("OBSIDIAN_ABUSEIPDB_API_KEY", "").strip()
 DB_PATH = Path(os.environ.get("OBSIDIAN_DB_PATH", str(ROOT / "instance" / "obsidiancyber.sqlite3")))
@@ -449,6 +454,12 @@ def _db_connect():
             created_at TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'verification_pending',
             paypal_order_id TEXT,
+            payment_provider TEXT,
+            telegram_invoice_payload_hash TEXT,
+            telegram_chat_id TEXT,
+            telegram_user_id TEXT,
+            telegram_payment_charge_id TEXT,
+            telegram_stars_amount INTEGER,
             price_cents INTEGER NOT NULL,
             report_json TEXT,
             report_generated_at TEXT,
@@ -457,6 +468,12 @@ def _db_connect():
             report_email_attempted_at TEXT
         )""")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS paypal_order_id TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_provider TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_invoice_payload_hash TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_user_id TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_payment_charge_id TEXT")
+        conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_stars_amount INTEGER")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS authorization_acknowledged_at TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS terms_acknowledged_at TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS immediate_delivery_acknowledged_at TEXT")
@@ -466,6 +483,8 @@ def _db_connect():
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS report_email_sent_at TEXT")
         conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS report_email_attempted_at TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_telegram_charge_id ON orders(telegram_payment_charge_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_telegram_payload_hash ON orders(telegram_invoice_payload_hash)")
         conn.execute(LEADS_TABLE_SQL)
         conn.commit()
         return _PostgresCompatConnection(conn)
@@ -490,6 +509,12 @@ def _db_connect():
         created_at TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'verification_pending',
         paypal_order_id TEXT,
+        payment_provider TEXT,
+        telegram_invoice_payload_hash TEXT,
+        telegram_chat_id TEXT,
+        telegram_user_id TEXT,
+        telegram_payment_charge_id TEXT,
+        telegram_stars_amount INTEGER,
         price_cents INTEGER NOT NULL,
         report_json TEXT,
         report_generated_at TEXT,
@@ -500,6 +525,16 @@ def _db_connect():
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
     if "paypal_order_id" not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN paypal_order_id TEXT")
+    for column_name, column_type in {
+        "payment_provider": "TEXT",
+        "telegram_invoice_payload_hash": "TEXT",
+        "telegram_chat_id": "TEXT",
+        "telegram_user_id": "TEXT",
+        "telegram_payment_charge_id": "TEXT",
+        "telegram_stars_amount": "INTEGER",
+    }.items():
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE orders ADD COLUMN {column_name} {column_type}")
     if "authorization_acknowledged_at" not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN authorization_acknowledged_at TEXT")
     if "terms_acknowledged_at" not in columns:
@@ -517,6 +552,8 @@ def _db_connect():
     if "report_email_attempted_at" not in columns:
         conn.execute("ALTER TABLE orders ADD COLUMN report_email_attempted_at TEXT")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_paypal_order_id ON orders(paypal_order_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_telegram_charge_id ON orders(telegram_payment_charge_id)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_telegram_payload_hash ON orders(telegram_invoice_payload_hash)")
     conn.execute(LEADS_TABLE_SQL)
     conn.commit()
     try:
@@ -1034,17 +1071,33 @@ def _send_paid_report_email(order: dict, report: dict) -> bool:
 
     return True
 
-def _paid_report(payment_id: str, access_token: str, *, internal: bool = False) -> tuple[int, dict]:
-    if not isinstance(payment_id, str) or not re.fullmatch(r"[A-Z0-9]{1,36}", payment_id):
-        return 400, {"error": "Identificador de orden PayPal no válido."}
+def _paid_report(payment_id: str, access_token: str, *, internal: bool = False, payment_provider: str = "paypal") -> tuple[int, dict]:
+    if payment_provider == "paypal":
+        valid_id = isinstance(payment_id, str) and bool(re.fullmatch(r"[A-Z0-9]{1,36}", payment_id))
+        error_message = "Identificador de orden PayPal no válido."
+    elif payment_provider == "telegram_stars":
+        valid_id = isinstance(payment_id, str) and bool(re.fullmatch(r"OC-ORD-[A-F0-9]{16}", payment_id))
+        error_message = "Referencia de pedido Stars no válida."
+    else:
+        return 400, {"error": "Proveedor de pago no válido."}
+    if not valid_id:
+        return 400, {"error": error_message}
     conn = _db_connect()
     try:
         _purge_expired_orders(conn)
-        order = conn.execute("SELECT * FROM orders WHERE paypal_order_id = ?", (payment_id,)).fetchone()
+        if payment_provider == "telegram_stars":
+            order = conn.execute("SELECT * FROM orders WHERE order_id = ?", (payment_id,)).fetchone()
+        else:
+            order = conn.execute("SELECT * FROM orders WHERE paypal_order_id = ?", (payment_id,)).fetchone()
         if not order:
             return 404, {"error": "No se encontró un pedido asociado a esta orden PayPal."}
         if internal:
-            if order["status"] not in {"payment_pending", "paid", "report_generating", "report_ready"}:
+            if payment_provider == "telegram_stars":
+                if (order["payment_provider"] != "telegram_stars"
+                        or not order["telegram_payment_charge_id"]
+                        or order["status"] not in {"paid", "payment_pending", "report_generating", "report_ready"}):
+                    return 403, {"error": "El pago Stars no está confirmado."}
+            elif order["status"] not in {"payment_pending", "paid", "report_generating", "report_ready"}:
                 return 403, {"error": "El pedido no está confirmado como pagado."}
         else:
             supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
@@ -1056,14 +1109,17 @@ def _paid_report(payment_id: str, access_token: str, *, internal: bool = False) 
         order_dict = dict(order)
     finally:
         conn.close()
-    try:
-        payment = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
-    except RuntimeError as exc:
-        return 503, {"error": str(exc)}
-    if payment.get("status") != "COMPLETED":
-        return 202, {"status": "payment_pending", "message": "PayPal todavía no confirma el pago."}
-    if not _paypal_order_paid(payment, order_dict):
-        return 402, {"error": "No se ha podido verificar que PayPal capturase el importe y la moneda esperados."}
+    if payment_provider == "paypal":
+        try:
+            payment = _paypal_api("GET", f"/v2/checkout/orders/{payment_id}")
+        except RuntimeError as exc:
+            return 503, {"error": str(exc)}
+        if payment.get("status") != "COMPLETED":
+            return 202, {"status": "payment_pending", "message": "PayPal todavía no confirma el pago."}
+        if not _paypal_order_paid(payment, order_dict):
+            return 402, {"error": "No se ha podido verificar que PayPal capturase el importe y la moneda esperados."}
+    elif not order_dict.get("telegram_payment_charge_id"):
+        return 403, {"error": "No consta una transacción Telegram Stars confirmada."}
     if existing_report:
         result = json.loads(existing_report)
         _send_paid_report_email(order_dict, result)
@@ -1135,13 +1191,13 @@ def _paid_report(payment_id: str, access_token: str, *, internal: bool = False) 
             conn.execute(
                 """
                 UPDATE orders
-                SET status = 'payment_pending', report_generated_at = NULL
+                SET status = ?, report_generated_at = NULL
                 WHERE order_id = ?
                   AND status = 'report_generating'
                   AND report_generated_at = ?
                   AND report_json IS NULL
                 """,
-                (order_dict["order_id"], claim_at),
+                (("payment_pending" if payment_provider == "paypal" else "paid"), order_dict["order_id"], claim_at),
             )
             conn.commit()
         finally:
@@ -1153,11 +1209,15 @@ def _paid_report(payment_id: str, access_token: str, *, internal: bool = False) 
     result["commercial"] = {
         "order_id": order_dict["order_id"],
         "payment_status": "paid",
+        "payment_method": "Telegram Stars" if payment_provider == "telegram_stars" else "PayPal",
         "domain_control": order_dict.get("domain_control_method") or "dns_txt",
-        "amount_eur": f"{int(order_dict['price_cents']) / 100:.2f}",
         "generated_after_payment": True,
         "retention_days": REPORT_RETENTION_DAYS,
     }
+    if payment_provider == "telegram_stars":
+        result["commercial"]["amount_stars"] = int(order_dict.get("telegram_stars_amount") or 0)
+    else:
+        result["commercial"]["amount_eur"] = f"{int(order_dict['price_cents']) / 100:.2f}"
     result["storage"] = f"stored_until_retention_{REPORT_RETENTION_DAYS}_days"
 
     conn = _db_connect()
@@ -1858,7 +1918,7 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/paypal/webhook":
             return self._handle_paypal_webhook()
-        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/paypal/capture", "/api/sales-chat", "/api/leads", "/api/admin/leads/unsubscribe"}:
+        if path not in {"/api/analyze", "/api/orders", "/api/orders/verify", "/api/checkout", "/api/paypal/capture", "/api/sales-chat", "/api/leads", "/api/admin/leads/unsubscribe", "/api/telegram-stars/invoice", "/api/telegram-stars/precheck", "/api/telegram-stars/confirm", "/api/telegram-stars/report-pdf"}:
             return self._json(404, {"error": "Endpoint no encontrado."})
         if not self._origin_allowed():
             return self._json(403, {"error": "Origen no permitido."})
@@ -1868,6 +1928,184 @@ class Handler(SimpleHTTPRequestHandler):
         if error:
             return self._json(error[0], error[1])
 
+        if path.startswith("/api/telegram-stars/"):
+            supplied_secret = self.headers.get("X-Obsidian-Telegram-Secret", "")
+            if (not TELEGRAM_STARS_SECRET or not supplied_secret
+                    or not hmac.compare_digest(supplied_secret, TELEGRAM_STARS_SECRET)):
+                return self._json(401, {"error": "No autorizado."})
+
+            if path in {"/api/telegram-stars/invoice", "/api/telegram-stars/precheck"}:
+                if not 1 <= TELEGRAM_STARS_PRICE <= 1_000_000:
+                    return self._json(503, {"error": "Precio Telegram Stars no configurado."})
+
+            if path == "/api/telegram-stars/invoice":
+                order_id = payload.get("order_id")
+                chat_id = payload.get("chat_id")
+                user_id = payload.get("user_id")
+                access_token = self.headers.get("X-Obsidian-Report-Token", "")
+                if (not isinstance(order_id, str) or not re.fullmatch(r"OC-ORD-[A-F0-9]{16}", order_id)
+                        or type(chat_id) is not int or type(user_id) is not int):
+                    return self._json(422, {"error": "Pedido o chat no válido."})
+                conn = _db_connect()
+                try:
+                    order = conn.execute("SELECT * FROM orders WHERE order_id = ?", (order_id,)).fetchone()
+                    if not order:
+                        return self._json(404, {"error": "Pedido inexistente o expirado."})
+                    supplied_hash = hashlib.sha256((access_token or "").encode()).hexdigest()
+                    if not access_token or not hmac.compare_digest(supplied_hash, str(order["access_token_hash"])):
+                        return self._json(403, {"error": "Token de pedido no válido."})
+                    if not order["verified"] or order["status"] != "verified" or order["paypal_order_id"]:
+                        return self._json(409, {"error": "El pedido no está disponible para un nuevo pago Stars."})
+                    if order["payment_provider"] not in (None, "telegram_stars"):
+                        return self._json(409, {"error": "El pedido ya está asociado a otro método de pago."})
+                    invoice_payload = secrets.token_urlsafe(32)
+                    payload_hash = hashlib.sha256(invoice_payload.encode()).hexdigest()
+                    cursor = conn.execute(
+                        "UPDATE orders SET payment_provider = 'telegram_stars', telegram_invoice_payload_hash = ?, telegram_chat_id = ?, telegram_user_id = ?, telegram_stars_amount = ? WHERE order_id = ? AND verified = 1 AND status = 'verified' AND paypal_order_id IS NULL",
+                        (payload_hash, str(chat_id), str(user_id), TELEGRAM_STARS_PRICE, order_id),
+                    )
+                    conn.commit()
+                    if cursor.rowcount != 1:
+                        return self._json(409, {"error": "El pedido ha cambiado. Inicia de nuevo la compra."})
+                finally:
+                    conn.close()
+                return self._json(200, {"status": "invoice_ready", "order_id": order_id,
+                                        "invoice_payload": invoice_payload, "stars_amount": TELEGRAM_STARS_PRICE})
+
+            if path == "/api/telegram-stars/precheck":
+                invoice_payload = payload.get("invoice_payload")
+                chat_id = payload.get("chat_id")
+                user_id = payload.get("user_id")
+                currency = payload.get("currency")
+                amount = payload.get("total_amount")
+                if (not isinstance(invoice_payload, str) or not 1 <= len(invoice_payload) <= 128
+                        or type(chat_id) is not int or type(user_id) is not int
+                        or currency != "XTR" or type(amount) is not int):
+                    return self._json(422, {"accepted": False, "error": "Datos de factura no válidos."})
+                payload_hash = hashlib.sha256(invoice_payload.encode()).hexdigest()
+                conn = _db_connect()
+                try:
+                    order = conn.execute("SELECT * FROM orders WHERE telegram_invoice_payload_hash = ?", (payload_hash,)).fetchone()
+                finally:
+                    conn.close()
+                accepted = bool(
+                    order and order["verified"] and order["status"] == "verified"
+                    and order["payment_provider"] == "telegram_stars"
+                    and str(order["telegram_chat_id"]) == str(chat_id)
+                    and str(order["telegram_user_id"]) == str(user_id)
+                    and int(order["telegram_stars_amount"] or 0) == amount
+                    and amount == TELEGRAM_STARS_PRICE
+                )
+                if not accepted:
+                    return self._json(409, {"accepted": False, "error": "La factura no coincide con un pedido pendiente."})
+                return self._json(200, {"accepted": True})
+
+            if path == "/api/telegram-stars/confirm":
+                invoice_payload = payload.get("invoice_payload")
+                chat_id = payload.get("chat_id")
+                user_id = payload.get("user_id")
+                currency = payload.get("currency")
+                amount = payload.get("total_amount")
+                charge_id = payload.get("telegram_payment_charge_id")
+                if (not isinstance(invoice_payload, str) or not 1 <= len(invoice_payload) <= 128
+                        or type(chat_id) is not int or type(user_id) is not int
+                        or currency != "XTR" or type(amount) is not int
+                        or not isinstance(charge_id, str) or not 1 <= len(charge_id) <= 255):
+                    return self._json(422, {"error": "Datos de pago Stars no válidos."})
+                payload_hash = hashlib.sha256(invoice_payload.encode()).hexdigest()
+                conn = _db_connect()
+                order_copy = None
+                try:
+                    order = conn.execute("SELECT * FROM orders WHERE telegram_invoice_payload_hash = ?", (payload_hash,)).fetchone()
+                    if not order:
+                        return self._json(404, {"error": "No se encontró el pedido de esta factura."})
+                    if (not order["verified"] or order["payment_provider"] != "telegram_stars"
+                            or str(order["telegram_chat_id"]) != str(chat_id)
+                            or str(order["telegram_user_id"]) != str(user_id)
+                            or order["telegram_stars_amount"] is None
+                            or int(order["telegram_stars_amount"]) != amount):
+                        return self._json(403, {"error": "El pago no coincide con el pedido."})
+                    if order["status"] in {"paid", "report_generating", "report_ready"}:
+                        if order["telegram_payment_charge_id"] == charge_id:
+                            return self._json(200, {"status": "paid", "order_id": order["order_id"], "duplicate": True})
+                        return self._json(409, {"error": "El pedido ya tiene otro pago confirmado."})
+                    if order["status"] != "verified" or order["paypal_order_id"]:
+                        return self._json(409, {"error": "El pedido no está pendiente de pago Stars."})
+                    duplicate = conn.execute("SELECT order_id FROM orders WHERE telegram_payment_charge_id = ?", (charge_id,)).fetchone()
+                    if duplicate and duplicate["order_id"] != order["order_id"]:
+                        return self._json(409, {"error": "Esta transacción ya está asociada a otro pedido."})
+                    cursor = conn.execute(
+                        "UPDATE orders SET status = 'paid', payment_provider = 'telegram_stars', telegram_payment_charge_id = ? WHERE order_id = ? AND status = 'verified' AND telegram_invoice_payload_hash = ?",
+                        (charge_id, order["order_id"], payload_hash),
+                    )
+                    conn.commit()
+                    if cursor.rowcount != 1:
+                        latest = conn.execute("SELECT status, telegram_payment_charge_id, order_id FROM orders WHERE order_id = ?", (order["order_id"],)).fetchone()
+                        if latest and latest["telegram_payment_charge_id"] == charge_id and latest["status"] in {"paid", "report_generating", "report_ready"}:
+                            return self._json(200, {"status": "paid", "order_id": latest["order_id"], "duplicate": True})
+                        return self._json(409, {"error": "No se pudo registrar el pago de forma única."})
+                    order_copy = dict(order)
+                    order_copy["status"] = "paid"
+                    order_copy["telegram_payment_charge_id"] = charge_id
+                except Exception:
+                    conn.close()
+                    return self._json(409, {"error": "La transacción ya existe o no se pudo registrar de forma única."})
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                _send_brevo_notification(
+                    "ObsidianCyber: pago Telegram Stars confirmado",
+                    "\n".join(["Telegram Stars ha confirmado el pago.",
+                              f"Pedido: {order_copy.get('order_id', '')}",
+                              f"Dominio: {order_copy.get('domain', '')}",
+                              f"Correo del cliente: {order_copy.get('email', '')}",
+                              f"Stars: {amount}", f"Transacción: {charge_id}"]),
+                )
+                return self._json(200, {"status": "paid", "order_id": order_copy["order_id"]})
+
+            if path == "/api/telegram-stars/report-pdf":
+                order_id = payload.get("order_id")
+                chat_id = payload.get("chat_id")
+                user_id = payload.get("user_id")
+                if (not isinstance(order_id, str) or not re.fullmatch(r"OC-ORD-[A-F0-9]{16}", order_id)
+                        or type(chat_id) is not int or type(user_id) is not int):
+                    return self._json(422, {"error": "Pedido o chat no válido."})
+                conn = _db_connect()
+                try:
+                    order = conn.execute("SELECT * FROM orders WHERE order_id = ?", (order_id,)).fetchone()
+                finally:
+                    conn.close()
+                if (not order or not order["verified"] or order["payment_provider"] != "telegram_stars"
+                        or str(order["telegram_chat_id"]) != str(chat_id)
+                        or str(order["telegram_user_id"]) != str(user_id)
+                        or not order["telegram_payment_charge_id"]):
+                    return self._json(403, {"error": "No se ha autorizado la entrega de este informe."})
+                report_status, report_payload = _paid_report(
+                    order_id, "", internal=True, payment_provider="telegram_stars"
+                )
+                if (report_status != 200 or not isinstance(report_payload, dict)
+                        or report_payload.get("status") != "ready"
+                        or not isinstance(report_payload.get("report"), dict)):
+                    return self._json(report_status if report_status != 200 else 503, report_payload if isinstance(report_payload, dict) else {"error": "Informe aún no disponible."})
+                try:
+                    from pdf_report import build_paid_report_pdf
+                    pdf_bytes = build_paid_report_pdf(report_payload["report"])
+                except ModuleNotFoundError:
+                    return self._json(503, {"error": "El generador PDF no está instalado."})
+                except Exception as exc:
+                    traceback.print_exc(file=sys.stderr)
+                    return self._json(500, {"error": f"No se pudo generar el PDF ({type(exc).__name__})."})
+                self.send_response(200)
+                self.send_header("Content-Type", "application/pdf")
+                self.send_header("Content-Disposition", 'attachment; filename="obsidiancyber-exposure-brief.pdf"')
+                self.send_header("Content-Length", str(len(pdf_bytes)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(pdf_bytes)
+                return
 
         if path == "/api/leads":
             # Campo trampa: los humanos no lo ven; si viene relleno es un bot. Respuesta idéntica, sin guardar.
