@@ -550,15 +550,19 @@ class IntelligenceTests(unittest.TestCase):
 
 class CommercialFlowTests(unittest.TestCase):
     def setUp(self):
+        # El valor por defecto en producción es no exigir TXT; estos tests ejercitan el modo estricto.
+        self._require_dns_patch = mock.patch.object(server, "REQUIRE_DNS_VERIFICATION", True)
+        self._require_dns_patch.start()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_db = server.DB_PATH
         server.DB_PATH = Path(self.temp_dir.name) / "test.sqlite3"
 
     def tearDown(self):
+        self._require_dns_patch.stop()
         server.DB_PATH = self.old_db
         self.temp_dir.cleanup()
 
-    def test_order_requires_dns_verification_by_default(self):
+    def test_order_requires_dns_verification_when_enabled(self):
         created = server._create_order("example.com", "buyer@example.com", False, immediate_delivery_acknowledged_at="2026-10-21T00:00:00Z")
         order = server._order_row(created["order_id"])
         self.assertFalse(created["verified"])

@@ -173,7 +173,8 @@ REPORT_RETENTION_DAYS = max(1, min(365, int(os.environ.get("OBSIDIAN_REPORT_RETE
 COMMERCIAL_TERMS_READY = os.environ.get("OBSIDIAN_COMMERCIAL_TERMS_READY", "false").strip().lower() in {"1", "true", "yes"}
 # Domain-control proof by DNS TXT. Default: required. If disabled, the buyer only declares authorization
 # (checkbox) and the report states that domain control was NOT verified.
-REQUIRE_DNS_VERIFICATION = os.environ.get("OBSIDIAN_REQUIRE_DNS_VERIFICATION", "true").strip().lower() not in {"0", "false", "no"}
+# Por defecto el cliente solo declara la titularidad del dominio. Ponlo a "true" para exigir el TXT DNS.
+REQUIRE_DNS_VERIFICATION = os.environ.get("OBSIDIAN_REQUIRE_DNS_VERIFICATION", "false").strip().lower() in {"1", "true", "yes", "si", "sí"}
 
 DOMAIN_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 
