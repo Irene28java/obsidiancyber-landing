@@ -205,3 +205,34 @@ button:disabled{opacity:.65;cursor:wait}.capability-grid article{display:flex;fl
 .hp-field{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
 .lead-section{scroll-margin-top:24px}
 @media print{#contacto{display:none!important}}
+
+/* Compra dentro del chat */
+.oc-sales-panel.oc-sales-panel-checkout { width: min(440px, calc(100vw - 28px)); height: min(720px, calc(100vh - 85px)); }
+.oc-sales-panel [hidden] { display: none !important; }
+.oc-sales-checkout { flex: 1; overflow-y: auto; padding: 12px 14px 16px; }
+.oc-sales-back {
+  background: transparent; color: #72f0d7; border: 1px solid #2d5552; border-radius: 6px;
+  padding: 7px 10px; font: inherit; font-size: .78rem; cursor: pointer; margin-bottom: 12px;
+}
+.oc-sales-back:hover { background: #142a2d; }
+.oc-sales-buy {
+  background: #72f0d7; color: #06110f; border: 1px solid #72f0d7; border-radius: 6px;
+  font: inherit; font-weight: 700; font-size: .8rem; padding: 7px 11px; cursor: pointer;
+}
+.oc-sales-buy:hover { background: #9af5e2; }
+.oc-sales-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+.oc-sales-checkout #orderForm { border: 0; padding: 0; background: transparent; max-width: none; }
+.oc-sales-checkout #orderForm .formheading { padding-bottom: 10px; margin-bottom: 12px; }
+.oc-sales-checkout #orderForm .formheading h3 { font-size: 1.05rem; }
+.oc-sales-checkout .inputrow { flex-wrap: wrap; padding: 6px; }
+.oc-sales-checkout .inputrow input { min-width: 120px; padding: 9px; }
+.oc-sales-checkout .inputrow .button { width: 100%; }
+.oc-sales-checkout .consent { align-items: flex-start; font-size: .74rem; line-height: 1.5; margin-top: 12px; }
+.oc-sales-checkout .consent input { margin-top: 3px; flex-shrink: 0; }
+.oc-sales-checkout .privacy-note { padding: 10px; }
+.oc-sales-checkout .verification-panel { margin-top: 16px; padding: 12px; max-width: none; }
+.oc-sales-checkout .txt-value { flex-wrap: wrap; }
+.oc-sales-checkout .txt-value code { overflow-wrap: anywhere; }
+.oc-sales-checkout #paypalButtonContainer { min-height: 48px; margin-top: 10px; }
+.oc-sales-checkout .verification-actions { margin: 14px 0; }
+.oc-sales-checkout .verification-actions .button { width: 100%; }

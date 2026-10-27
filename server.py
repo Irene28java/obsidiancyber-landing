@@ -2313,6 +2313,9 @@ DATOS CONFIRMADOS:
   cumplimiento legal. No incluye búsquedas de brechas de email ni dark web.
 - Precio piloto: __PRICE__ por dominio. No des otra cifra.
 - El informe solo se entrega después de que el servidor confirme el pago.
+- Si el cliente quiere comprar, dile que pulse el botón «Comprar aquí» del chat: ahí
+  indica su dominio y correo, acepta las condiciones y paga con PayPal o tarjeta
+  sin salir de la página. Tú no recoges dominio, correo ni pagos en la conversación.
 
 No inventes datos, prestaciones, hallazgos, descuentos ni condiciones fiscales.
 No afirmes que se ha realizado un análisis, guardado un lead, enviado un email

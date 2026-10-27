@@ -783,6 +783,90 @@ void init();
   close?.addEventListener('click', () => setOpen(false));
   orderLink?.addEventListener('click', () => setOpen(false));
 
+  // Compra dentro del chat: el formulario de pedido y el panel de pago reales
+  // (con sus consentimientos, endpoints y botones de PayPal) se muestran dentro
+  // del chat. No se duplica ninguna lógica: el servidor sigue validando todo.
+  const buyButton = document.querySelector('#ocSalesBuyNow');
+  const checkoutBox = document.querySelector('#ocSalesCheckout');
+  const checkoutSlot = document.querySelector('#ocSalesCheckoutSlot');
+  const checkoutBack = document.querySelector('#ocSalesCheckoutBack');
+  const chatLinks = document.querySelector('.oc-sales-links');
+  const workspaceOrderForm = document.querySelector('#orderForm');
+  const workspaceVerification = document.querySelector('#verificationPanel');
+  const homeMarkers = new Map();
+  let checkoutOpen = false;
+
+  function moveIntoChat(node) {
+    if (!node || homeMarkers.has(node)) return;
+    const marker = document.createComment(`oc-home:${node.id}`);
+    node.parentNode.insertBefore(marker, node);
+    homeMarkers.set(node, marker);
+    checkoutSlot.appendChild(node);
+  }
+  function moveBack() {
+    homeMarkers.forEach((marker, node) => {
+      if (marker.parentNode) marker.parentNode.insertBefore(node, marker);
+      marker.remove();
+    });
+    homeMarkers.clear();
+  }
+  function openCheckout() {
+    if (!checkoutBox || !workspaceOrderForm) return;
+    checkoutOpen = true;
+    moveIntoChat(workspaceOrderForm);
+    moveIntoChat(workspaceVerification);
+    checkoutBox.hidden = false;
+    area.hidden = true;
+    form.hidden = true;
+    if (chatLinks) chatLinks.hidden = true;
+    panel.classList.add('oc-sales-panel-checkout');
+    setOpen(true);
+    checkoutBox.scrollTop = 0;
+    document.querySelector('#orderDomain')?.focus();
+  }
+  function closeCheckout() {
+    checkoutOpen = false;
+    moveBack();
+    checkoutBox.hidden = true;
+    area.hidden = false;
+    form.hidden = false;
+    if (chatLinks) chatLinks.hidden = false;
+    panel.classList.remove('oc-sales-panel-checkout');
+    area.scrollTop = area.scrollHeight;
+  }
+  buyButton?.addEventListener('click', openCheckout);
+  checkoutBack?.addEventListener('click', closeCheckout);
+
+  // Cuando el servidor confirma el pago y se genera el informe, se devuelve el
+  // formulario a su sitio, se cierra el chat y se lleva al cliente al informe.
+  const paidReport = document.querySelector('#report');
+  if (paidReport && 'MutationObserver' in window) {
+    new MutationObserver(() => {
+      if (!checkoutOpen || paidReport.hidden || !paidReport.childElementCount) return;
+      closeCheckout();
+      bubble('assistant', 'Pago confirmado. Tu informe ya está generado: te lo muestro en la página y puedes descargarlo en PDF.');
+      setOpen(false);
+      paidReport.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).observe(paidReport, { attributes: true, attributeFilter: ['hidden'], childList: true });
+  }
+
+  function maybeOfferCheckout(text) {
+    if (!/compr|pagar|pago|contrat|pedir|pedido|quiero|precio|cu[aá]nto|cuesta|empez/i.test(text)) return;
+    if (area.querySelector('.oc-sales-cta')) return;
+    const cta = document.createElement('div');
+    cta.className = 'oc-sales-bubble assistant oc-sales-cta';
+    const label = document.createElement('span');
+    label.textContent = 'Puedes pedirlo ahora mismo sin salir del chat: dominio, correo, aceptar las condiciones y pagar con PayPal o tarjeta.';
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'oc-sales-buy';
+    action.textContent = 'Comprar aquí ↗';
+    action.addEventListener('click', openCheckout);
+    cta.append(label, action);
+    area.appendChild(cta);
+    area.scrollTop = area.scrollHeight;
+  }
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const text = input.value.trim();
@@ -809,6 +893,7 @@ void init();
       pending.textContent = reply;
       history.push({ role: 'assistant', content: reply });
       history = history.slice(-8);
+      maybeOfferCheckout(`${text} ${reply}`);
     } catch (error) {
       pending.classList.remove('pending');
       pending.textContent = error.message || 'No se pudo conectar con el asistente.';
