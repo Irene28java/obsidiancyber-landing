@@ -2231,17 +2231,20 @@ class Handler(SimpleHTTPRequestHandler):
                         "direcciones IP públicas, resolución DNS y datos del "
                         "certificado cuando pueden verificarse. El precio piloto "
                         f"es de {_price_text()} por dominio. "
-                        "El estado del checkout se comprueba al iniciar el pedido. "
-                        "El informe solo se genera cuando el servidor confirma el pago. Puedes abrir "
-                        "el informe de muestra con el enlace del chat."
+                        "Puedes pedirlo ahora mismo con el botón «Comprar aquí» del chat: "
+                        "indicas tu dominio y tu correo, aceptas las condiciones y pagas con "
+                        "PayPal o tarjeta. El informe solo se genera cuando el servidor "
+                        "confirma el pago. También puedes abrir el informe de muestra "
+                        "con el enlace del chat."
                     )
                 else:
                     reply = (
                         f"El precio piloto es de {_price_text()} por dominio. "
-                        "La disponibilidad del checkout se comprueba al iniciar el pedido; "
-                        "el informe solo se genera cuando el servidor confirma el pago. Puedes revisar "
-                        "el informe de muestra con el enlace que aparece debajo "
-                        "de la conversación."
+                        "Si quieres pedirlo, pulsa el botón «Comprar aquí» del chat: "
+                        "indicas tu dominio y tu correo, aceptas las condiciones y pagas con "
+                        "PayPal o tarjeta sin salir de esta ventana. El informe solo se genera "
+                        "cuando el servidor confirma el pago. Antes puedes revisar el informe "
+                        "de muestra con el enlace que aparece debajo de la conversación."
                     )
                 return self._json(200, {"reply": reply})
 
