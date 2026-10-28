@@ -1615,7 +1615,12 @@ class Handler(SimpleHTTPRequestHandler):
             if value.strip()
         ]
 
-        public_base = os.environ.get("PUBLIC_BASE_URL", "").strip()
+        # La propia URL pública del servicio (Render) también es un origen válido:
+        # permite servir la web completa desde el mismo servidor.
+        public_base = (
+            os.environ.get("OBSIDIAN_PUBLIC_BASE_URL", "").strip()
+            or os.environ.get("PUBLIC_BASE_URL", "").strip()
+        )
         if public_base:
             allowed_values.append(public_base)
 
