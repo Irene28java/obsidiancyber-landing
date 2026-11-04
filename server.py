@@ -1636,6 +1636,10 @@ class Handler(SimpleHTTPRequestHandler):
                     (parsed.scheme.lower(), parsed.netloc.lower())
                 )
 
+        # Netlify sirve el frontend estático y reescribe /api/* hacia este backend.
+        # Se permite únicamente el dominio público exacto del sitio.
+        allowed_origins.add(("https", "obsidiancyber.netlify.app"))
+
         return (
             parsed_origin.scheme.lower(),
             parsed_origin.netloc.lower(),
