@@ -4,176 +4,133 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#080d13">
-  <meta name="description" content="ObsidianCyber: inteligencia defensiva de exposición digital con evidencias verificables y prioridades explicables.">
-  <title>ObsidianCyber — See the unseen</title>
+  <meta name="description" content="Exposure Brief de ObsidianCyber: revisión técnica inicial y limitada de DNS y HTTPS/TLS para dominios que controlas o tienes autorización para evaluar.">
+  <meta property="og:title" content="ObsidianCyber — Exposure Brief">
+  <meta property="og:description" content="Una primera fotografía técnica de la exposición pública de tu dominio. Alcance claro, evidencias y limitaciones explicadas.">
+  <title>ObsidianCyber — Exposure Brief para tu dominio</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="nav">
   <a class="brand" href="#top" aria-label="ObsidianCyber inicio">◈ OBSIDIAN<span>CYBER</span></a>
   <nav aria-label="Navegación principal">
-    <a href="#capabilities">Capacidades</a><a href="#workflow">Metodología</a><a class="navcta" href="#workspace">Exposure Brief · <span class="pilot-price-total">79,00 €</span> ↗</a>
+    <a href="#que-incluye">Qué incluye</a><a href="#como-funciona">Cómo funciona</a><a href="#preguntas">Preguntas</a><a class="navcta" href="#contacto">Consultar el piloto ↗</a>
   </nav>
   <button class="menu" aria-label="Abrir menú" aria-expanded="false">☰</button>
 </header>
 <main id="top">
   <section class="hero wrap">
     <div class="copy">
-      <div class="eyebrow">● CYBER EXPOSURE INTELLIGENCE</div>
-      <h1>See the<br><em>unseen.</em></h1>
-      <p>Tu superficie digital deja señales. ObsidianCyber las organiza en un expediente defensivo: evidencias, contexto y próximos pasos sin ruido innecesario.</p>
-      <div class="actions"><a class="button primary" href="#workspace">Solicitar Exposure Brief ↗</a><a class="button" href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a></div>
-      <small>ENFOQUE DEFENSIVO · SOLO ACTIVOS AUTORIZADOS</small>
+      <div class="eyebrow">REVISIÓN DEFENSIVA · SERVICIO PILOTO</div>
+      <h1>Conoce tu<br><em>exposición.</em></h1>
+      <p>Una primera revisión técnica de las señales públicas de tu dominio. ObsidianCyber reúne observaciones DNS y comprobaciones HTTPS/TLS en un informe claro, con evidencias y límites explicados.</p>
+      <div class="actions"><a class="button primary" href="#contacto">Consultar disponibilidad ↗</a><a class="button" href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a></div>
+      <small>SOLO DOMINIOS PROPIOS O CON AUTORIZACIÓN EXPRESA</small>
     </div>
-    <div class="art"><div class="glow"></div><img src="assets/obsidiancyber-eye.png" alt="Emblema de ojo cibernético turquesa sobre una estructura oscura de cromo"><div class="tag tag1">SIGNAL STATUS<br><b>● DEFENSIVE</b></div><div class="tag tag2">INTELLIGENCE LAYER<br><b>OBS / AI</b></div></div>
-    <div class="herofoot">01 / DIGITAL EXPOSURE <span>OBSERVE · CORRELATE · PRIORITIZE</span></div>
+    <div class="art"><div class="glow"></div><img src="assets/obsidiancyber-eye.png" alt="Emblema de ObsidianCyber"><div class="tag tag1">REVISIÓN<br><b>DEFENSIVA</b></div><div class="tag tag2">ALCANCE<br><b>DELIMITADO</b></div></div>
+    <div class="herofoot">OBSIDIAN CYBER <span>EVIDENCIAS · CONTEXTO · SIGUIENTES PASOS</span></div>
   </section>
-  <div class="ticker">EXTERNAL ATTACK SURFACE　✳　DNS & TLS　✳　IP CONTEXT　✳　EXPOSURE EVIDENCE　✳　ACTIONABLE REPORTS</div>
 
-  <section id="capabilities" class="section wrap">
-    <div class="eyebrow">CAPACIDADES / 01</div><h2>Clarity in the <em>noise.</em></h2>
-    <p class="intro">No queremos darte una lista interminable de alertas. Queremos ayudarte a distinguir lo observado, lo que necesita validación y lo que debe atenderse primero.</p>
+  <div class="ticker">DNS PÚBLICO　✳　HTTPS / TLS　✳　HASTA 4 COMPROBACIONES　✳　INFORME TÉCNICO　✳　ALCANCE TRANSPARENTE</div>
+
+  <section id="que-incluye" class="section wrap">
+    <div class="eyebrow">EL SERVICIO / 01</div>
+    <h2>Una revisión inicial.<br><em>Sin promesas infladas.</em></h2>
+    <p class="intro">El piloto se centra en unas comprobaciones concretas que podemos describir y respaldar. No presentamos como analizado aquello que esta versión todavía no consulta.</p>
     <div class="grid capability-grid">
-      <article><label>01 / DISCOVER</label><h3>Huella digital</h3><p>Resolución DNS y dirección pública observada dentro del alcance autorizado.</p><span class="status status-live">MVP · ACTIVO</span></article>
-      <article><label>02 / INSPECT</label><h3>Señales TLS</h3><p>Conexión HTTPS, validación del certificado y fecha de expiración cuando puede verificarse.</p><span class="status status-live">MVP · ACTIVO</span></article>
-      <article><label>03 / CONTEXT</label><h3>Geolocalización IP</h3><p>País, región, ciudad o ASN si existe una base de datos con licencia adecuada configurada. La geolocalización es aproximada.</p><span class="status status-setup">REQUIERE FUENTE</span></article>
-      <article><label>04 / IDENTITY</label><h3>Email y brechas</h3><p>La consulta de correos se conectará a un proveedor autorizado, con consentimiento explícito y límites de privacidad.</p><span class="status status-roadmap">INTEGRACIÓN PENDIENTE</span></article>
-      <article><label>05 / OPEN WEB</label><h3>Exposición indexada</h3><p>Revisión de resultados públicos y consultas OSINT dentro del alcance; los hallazgos deberán validarse manualmente.</p><span class="status status-manual">REVISIÓN ASISTIDA</span></article>
-      <article><label>06 / THREAT INTEL</label><h3>Dark web y brechas</h3><p>La futura revisión podrá contrastar fuentes autorizadas de filtraciones. Esta versión no busca en la dark web ni afirma si existen datos filtrados.</p><span class="status status-roadmap">SIN CONEXIÓN</span></article>
-      <article><label>07 / IP REPUTATION</label><h3>Reputación IP e IoC</h3><p>Consulta opcional de reputación externa, separada del score TLS. Los reportes comunitarios requieren correlación y revisión humana, especialmente en CDN y hosting compartido.</p><span class="status status-roadmap">CONFIGURABLE · ABUSEIPDB</span></article>
+      <article><label>01 / DNS</label><h3>Resolución del dominio</h3><p>Consulta de registros DNS y detección de direcciones IP públicas asociadas al dominio dentro de los límites de la herramienta.</p><span class="status status-live">INCLUIDO</span></article>
+      <article><label>02 / HTTPS</label><h3>Comprobaciones TLS</h3><p>Hasta cuatro comprobaciones de conexión HTTPS/TLS en el puerto 443 sobre IP públicas resueltas, con observaciones del certificado cuando están disponibles.</p><span class="status status-live">INCLUIDO</span></article>
+      <article><label>03 / INFORME</label><h3>Hallazgos explicados</h3><p>Informe técnico con resultados observados, limitaciones de cobertura y recomendaciones para orientar una revisión posterior.</p><span class="status status-live">INCLUIDO</span></article>
     </div>
   </section>
 
-  <section id="workflow" class="workflow"><div class="wrap"><div class="eyebrow">METODOLOGÍA / 02</div><h2>From signal to <em>insight.</em></h2><div class="steps"><p><b>01</b> <strong>Define el alcance</strong><br>Confirma la titularidad del activo o el permiso para evaluarlo. El consentimiento del formulario por sí solo no verifica la propiedad.</p><p><b>02</b> <strong>Recoge señales limitadas</strong><br>Esta versión realiza resolución DNS y comprueba HTTPS/443 de forma pasiva en un máximo de cuatro IPs públicas resueltas. No hace escaneo de puertos ni pruebas de explotación.</p><p><b>03</b> <strong>Interpreta y valida</strong><br>El score se basa en señales comprobadas en este análisis limitado; no es una nota global de seguridad ni una auditoría completa.</p></div></div></section>
+  <section class="workflow" id="como-funciona"><div class="wrap">
+    <div class="eyebrow">PROCESO / 02</div><h2>Claro desde el <em>principio.</em></h2>
+    <div class="steps">
+      <p><b>01</b> <strong>Cuéntanos qué dominio quieres revisar</strong><br>Indica el dominio y confirma que eres su titular o que tienes autorización expresa para solicitar la revisión.</p>
+      <p><b>02</b> <strong>Confirmamos el alcance y la disponibilidad</strong><br>Te explicamos el procedimiento aplicable al pedido. La verificación DNS TXT puede solicitarse como comprobación de control técnico.</p>
+      <p><b>03</b> <strong>Revisión e informe</strong><br>La herramienta recoge las señales descritas en esta página. El resultado es una fotografía puntual, no una auditoría integral ni una garantía de seguridad.</p>
+    </div>
+  </div></section>
 
-  <section class="section wrap pilot-offer" id="pilot-offer">
-    <div class="eyebrow">ACCESO ANTICIPADO / PILOTO DE PAGO</div>
+  <section class="section wrap pilot-offer" id="piloto">
+    <div class="eyebrow">ACCESO PILOTO</div>
     <div class="pilot-layout">
       <div class="pilot-copy">
-        <h2>Less noise.<br><em>More evidence.</em></h2>
-        <p>Exposure Brief es un informe técnico delimitado para un dominio. Cada observación incluye origen, hora, confianza y limitaciones; las señales externas nunca se presentan como una prueba automática de compromiso.</p>
+        <h2>Menos ruido.<br><em>Más contexto.</em></h2>
+        <p>Exposure Brief está pensado para propietarios de pequeños negocios, profesionales y equipos que quieren una primera visión técnica de un dominio que gestionan.</p>
         <ul class="pilot-list">
-          <li>Resolución DNS y hasta cuatro comprobaciones HTTPS/TLS por IP.</li>
-          <li>Ficha de exposición con cronología, score explicado y recomendaciones.</li>
-          <li>GeoIP/ASN y reputación IP, solo si se configuran fuentes y licencias adecuadas.</li>
-          <li>Correo de brechas, Google/OSINT y dark web: no incluidos en este piloto automatizado.</li>
+          <li>Un dominio por solicitud.</li>
+          <li>Resolución DNS y hasta cuatro comprobaciones HTTPS/TLS en 443.</li>
+          <li>Resultados observados y recomendaciones en un informe.</li>
+          <li>Revisión limitada y puntual, no monitorización continua.</li>
         </ul>
-        <p class="subtle-note">El informe es una revisión inicial, no una auditoría integral ni una garantía de ausencia de vulnerabilidades.</p>
+        <p class="subtle-note">El precio y la disponibilidad se confirman personalmente antes de aceptar el encargo. No se inicia ningún análisis ni se realiza ningún cobro por enviar esta consulta.</p>
       </div>
       <aside class="pilot-card">
-        <span class="eyebrow">PILOTO / POR DOMINIO</span>
-        <div class="pilot-price">79,00 €</div>
-        <p class="pilot-price-breakdown subtle-note">IVA incluido</p>
-        <p>Precio por dominio · pago seguro con tarjeta o PayPal.</p>
-        <a class="button primary" href="#workspace">Solicitar Exposure Brief ↗</a>
-        <div id="checkoutStatus" class="checkout-status" role="status">Preparando tu solicitud…</div>
+        <span class="eyebrow">PRIMER CONTACTO</span>
+        <h3>¿Encaja con lo que necesitas?</h3>
+        <p>Cuéntanos qué dominio gestionas y qué quieres comprobar. Te responderemos con el alcance disponible y los siguientes pasos, sin compromiso.</p>
+        <a class="button primary" href="#contacto">Consultar el piloto ↗</a>
+        <p class="subtle-note">Esta página no activa una compra ni procesa pagos.</p>
       </aside>
     </div>
   </section>
 
-  <section id="workspace" class="section wrap workspace">
-    <div class="eyebrow">CENTRO DE ANÁLISIS / 03</div><h2>Order your <em>exposure brief.</em></h2>
-    <p class="intro" id="workspaceIntro">Primero verificamos el control del dominio mediante un registro DNS TXT. Después podrás elegir un método de pago disponible. El informe se genera y se muestra únicamente cuando el servidor confirma el pago.</p>
-    <form id="orderForm">
-      <div class="formheading"><div><h3>Solicitar informe</h3></div></div>
-      <label for="orderDomain">Dominio que controlas</label>
-      <div class="inputrow"><span>https://</span><input id="orderDomain" name="domain" placeholder="tuempresa.com" autocomplete="off" required maxlength="253" aria-describedby="orderDomainHelp"><button id="createOrderButton" class="button primary" type="submit" disabled>Preparar verificación ↗</button></div>
-      <small id="orderDomainHelp">Para el flujo automatizado debes poder publicar un registro TXT. Si el dominio pertenece a un cliente, necesitas autorización expresa además del control técnico.</small>
-      <label for="orderEmail">Correo de contacto</label>
-      <input id="orderEmail" name="email" type="email" placeholder="tu@empresa.com" autocomplete="email" required maxlength="254">
-      <label class="consent"><input id="orderAuth" name="authorized" type="checkbox" required> Confirmo que soy titular del dominio o tengo autorización expresa para esta revisión.</label>
-      <label class="consent"><input id="externalIntelConsent" name="externalIntelConsent" type="checkbox"> <strong>Opcional:</strong> autorizo que las IP públicas del informe se consulten en AbuseIPDB si el proveedor está configurado. Se enviarán solo las IP comprobadas dentro del límite indicado. Sus reportes son orientativos, no una prueba concluyente; puedo comprar el informe sin esta consulta.</label>
-      <label class="consent"><input id="termsConsent" name="terms" type="checkbox" required> Acepto el alcance limitado del piloto y entiendo que email/brechas, búsquedas web automáticas y dark web no forman parte de este informe.</label>
-      <label class="consent"><input id="immediateDeliveryConsent" name="immediateDelivery" type="checkbox" required> Solicito expresamente que el informe se genere de inmediato al confirmarse el pago y entiendo que, al ser contenido digital entregado al instante, pierdo mi derecho de desistimiento en ese momento (si compro como consumidor particular).</label>
-      <div class="privacy-note"><strong>Datos y alcance</strong><p>El dominio y el correo de contacto se vinculan al pedido. Las IP públicas solo se envían a un proveedor externo de reputación si la consulta está disponible y la autorizas expresamente. Puedes solicitar el informe sin esa consulta. Consulta la política de privacidad para conocer las finalidades, la conservación de datos y tus derechos. No introduzcas contraseñas ni datos sensibles.</p><p class="legal-links"><a href="terms.html" target="_blank" rel="noopener noreferrer">Condiciones del servicio</a> · <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacidad</a></p>
-<p id="obsidianSupportContact" class="subtle-note">¿Tienes dudas sobre el servicio o tu pedido? Escríbenos a <a href="mailto:obsidiancyber@hotmail.com">obsidiancyber@hotmail.com</a>.</p></div>
-      <div id="orderMessage" class="form-message info" role="status" aria-live="polite">Primero verificaremos el control del dominio mediante DNS TXT. Después podrás continuar al pago cuando el pedido esté validado. El informe solo se genera tras la confirmación del pago.</div>
-    </form>
-    <div id="verificationPanel" class="verification-panel" hidden>
-      <div class="verification-header"><span class="eyebrow">VERIFICACIÓN DEL DOMINIO / DNS TXT</span><h3>Publica este registro DNS</h3><p>Añade un TXT en tu proveedor DNS. La verificación puede tardar según el TTL y la propagación.</p></div>
-      <div class="txt-value"><span>Nombre / Host</span><code id="txtName"></code><button class="button copy-button" id="copyTxtName" type="button">Copiar</button></div>
-      <div class="txt-value"><span>Valor TXT</span><code id="txtValue"></code><button class="button copy-button" id="copyTxtValue" type="button">Copiar</button></div>
-      <div class="actions verification-actions"><button class="button primary" id="verifyDomainButton" type="button">Comprobar registro TXT ↗</button><button class="button primary" id="payButton" type="button" disabled>Continuar al pago seguro · 79,00 € ↗</button></div>
-      <div id="inlinePayPalPanel" class="inline-payments" hidden>
-        <p id="inlinePaymentMessage" class="subtle-note" role="status" aria-live="polite">
-          Selecciona una forma de pago. El informe solo se mostrará tras confirmar el cobro.
-        </p>
-        <div id="paypalButtonContainer"></div>
-        <div id="cardFieldsPanel" hidden>
-          <h3>Pago con tarjeta</h3>
-          <p class="subtle-note">Los datos de tarjeta se introducen en campos seguros alojados por PayPal.</p>
-          <div id="card-name-field-container" class="card-field"></div>
-          <div id="card-number-field-container" class="card-field"></div>
-          <div class="card-fields-grid">
-            <div id="card-expiry-field-container" class="card-field"></div>
-            <div id="card-cvv-field-container" class="card-field"></div>
-          </div>
-          <button id="cardPayButton" class="button primary" type="button">
-            Pagar con tarjeta · 79,00 €
-          </button>
-        </div>
-      </div>
-      <p id="verificationMessage" class="subtle-note" role="status" aria-live="polite"></p>
+  <section class="section wrap" id="limites">
+    <div class="eyebrow">TRANSPARENCIA / 03</div><h2>Qué no incluye <em>este piloto.</em></h2>
+    <p class="intro">Preferimos dejar claros los límites antes de que solicites nada.</p>
+    <div class="grid capability-grid">
+      <article><label>NO INCLUIDO</label><h3>Pentest o explotación</h3><p>No se explotan vulnerabilidades ni se realizan pruebas intrusivas o escaneos generales de puertos.</p></article>
+      <article><label>NO INCLUIDO</label><h3>Email y filtraciones</h3><p>No se consultan buzones, bases de credenciales filtradas ni servicios de búsqueda de brechas.</p></article>
+      <article><label>NO INCLUIDO</label><h3>Google y dark web</h3><p>No se realizan búsquedas automatizadas en Google ni investigaciones en dark web.</p></article>
+      <article><label>NO GARANTIZADO</label><h3>GeoIP y reputación IP</h3><p>Solo se mostrarían si las fuentes necesarias están configuradas y disponibles. No forman parte de la cobertura garantizada del piloto.</p></article>
+      <article><label>NO INCLUIDO</label><h3>Monitorización continua</h3><p>El informe refleja una observación puntual. No vigila cambios futuros ni envía alertas continuas.</p></article>
+      <article><label>IMPORTANTE</label><h3>No es una auditoría completa</h3><p>Un resultado sin señales destacadas no demuestra que el dominio o sus sistemas estén libres de vulnerabilidades.</p></article>
     </div>
-    <div id="report" class="report" hidden aria-live="polite"></div>
+  </section>
+
+  <section class="section wrap" id="preguntas">
+    <div class="eyebrow">PREGUNTAS FRECUENTES / 04</div><h2>Antes de <em>contactarnos.</em></h2>
+    <div class="steps">
+      <p><strong>¿Tengo que ser propietario del dominio?</strong><br>Debes ser titular o contar con autorización expresa para solicitar la revisión. No aceptamos análisis de dominios de terceros sin permiso.</p>
+      <p><strong>¿Es una auditoría de ciberseguridad?</strong><br>No. Es una revisión técnica inicial y limitada de DNS y HTTPS/TLS. No sustituye un pentest, una auditoría ni una evaluación profesional completa.</p>
+      <p><strong>¿Cuánto cuesta y cuándo se paga?</strong><br>El precio y la disponibilidad se comunicarán antes de aceptar el encargo. El formulario de esta página es solo una consulta: no crea un pedido ni cobra nada.</p>
+      <p><strong>¿Qué ocurre si una comprobación no está disponible?</strong><br>Se indicará como no disponible o no comprobada. La ausencia de datos no se interpretará como ausencia de riesgo.</p>
+    </div>
   </section>
 
   <section id="contacto" class="section wrap lead-section">
-    <div class="eyebrow">CONTACTO / 04</div><h2>¿Dudas antes de <em>pedir tu informe?</em></h2>
-    <p class="intro">Déjanos tu correo y te respondemos personalmente. Sin compromiso de compra.</p>
+    <div class="eyebrow">CONTACTO / 05</div><h2>Cuéntanos qué dominio <em>gestionas.</em></h2>
+    <p class="intro">Solicita información sobre el piloto. Revisaremos tu consulta y te responderemos personalmente. Enviar el formulario no implica contratar el servicio.</p>
     <form id="leadForm" novalidate>
       <label for="leadEmail">Correo de contacto</label>
       <input id="leadEmail" name="email" type="email" placeholder="tu@empresa.com" autocomplete="email" required maxlength="254">
       <label for="leadName">Nombre (opcional)</label>
       <input id="leadName" name="name" type="text" placeholder="Tu nombre" autocomplete="name" maxlength="100">
-      <label for="leadCompany">Empresa o web (opcional)</label>
+      <label for="leadCompany">Empresa o dominio (opcional)</label>
       <input id="leadCompany" name="company" type="text" placeholder="tuempresa.com" autocomplete="organization" maxlength="160">
-      <label for="leadMessage">¿Qué te gustaría saber? (opcional)</label>
-      <textarea id="leadMessage" name="message" maxlength="1000" placeholder="Cuéntanos qué dominio te preocupa o qué quieres comprobar"></textarea>
+      <label for="leadMessage">¿Qué te gustaría revisar? (opcional)</label>
+      <textarea id="leadMessage" name="message" maxlength="1000" placeholder="Indica el dominio que gestionas y qué necesitas conocer. No incluyas contraseñas ni datos sensibles."></textarea>
       <div class="hp-field" aria-hidden="true"><label for="leadHp">No rellenar</label><input id="leadHp" name="company_website_hp" type="text" tabindex="-1" autocomplete="off"></div>
-      <label class="consent"><input id="leadConsent" name="consent" type="checkbox" required><span>Acepto que ObsidianCyber use mi correo para responderme y enviarme información sobre sus servicios. Puedo darme de baja en cualquier momento escribiendo a obsidiancyber@hotmail.com. Más información en la <a href="privacy.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>.</span></label>
-      <div class="actions"><button id="leadSubmit" class="button primary" type="submit">Quiero que me contactéis ↗</button></div>
+      <label class="consent"><input id="leadConsent" name="consent" type="checkbox" required><span>Consiento que ObsidianCyber trate los datos facilitados para responder a esta consulta. He leído la <a href="privacy.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>.</span></label>
+      <div class="actions"><button id="leadSubmit" class="button primary" type="submit">Solicitar información ↗</button></div>
       <div id="leadMessageBox" class="form-message info" role="status" aria-live="polite" hidden></div>
     </form>
+    <p class="subtle-note">También puedes escribir a <a href="mailto:obsidiancyber@hotmail.com">obsidiancyber@hotmail.com</a>. Consulta las <a href="terms.html" target="_blank" rel="noopener noreferrer">condiciones del servicio</a> y la <a href="privacy.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>.</p>
   </section>
 
-  <section class="closing wrap"><div><div class="eyebrow">OBSIDIAN CYBER</div><h2>Look deeper.<br><em>Defend smarter.</em></h2><p class="closing-note">Evidence first. Claims only when verified.</p></div><a class="button" href="#top">Volver arriba ↑</a></section>
+  <section class="closing wrap"><div><div class="eyebrow">OBSIDIAN CYBER</div><h2>Evidencias primero.<br><em>Alcance honesto.</em></h2><p class="closing-note">Una revisión limitada, explicada con claridad.</p></div><a class="button" href="#top">Volver arriba ↑</a></section>
+
+  <!-- Se conservan los nodos del flujo técnico fuera de la vista para evitar activar el checkout desde esta página de captación. -->
+  <section id="workspace" class="section wrap workspace" hidden>
+    <p id="workspaceIntro">El flujo de pedidos está temporalmente deshabilitado desde la página comercial.</p>
+    <form id="orderForm"><input id="orderDomain" name="domain"><input id="orderEmail" name="email"><input id="orderAuth" type="checkbox"><input id="externalIntelConsent" type="checkbox"><input id="termsConsent" type="checkbox"><input id="immediateDeliveryConsent" type="checkbox"><button id="createOrderButton" type="submit" disabled></button><div id="orderMessage"></div></form>
+    <div id="checkoutStatus"></div><div id="verificationPanel" hidden><button id="copyTxtName" type="button"></button><code id="txtName"></code><button id="copyTxtValue" type="button"></button><code id="txtValue"></code><button id="verifyDomainButton" type="button"></button><button id="payButton" type="button"></button><div id="inlinePayPalPanel" hidden><div id="inlinePaymentMessage"></div><div id="paypalButtonContainer"></div><div id="cardFieldsPanel" hidden><div id="card-name-field-container"></div><div id="card-number-field-container"></div><div id="card-expiry-field-container"></div><div id="card-cvv-field-container"></div><button id="cardPayButton" type="button"></button></div></div><div id="verificationMessage"></div></div>
+    <div id="report" hidden></div>
+  </section>
 </main>
-<footer class="footer"><a class="brand" href="#top">◈ OBSIDIAN<span>CYBER</span></a><small>© <span id="year"></span> ObsidianCyber · Piloto defensivo · funcionalidades indicadas por cobertura</small><small>OBSERVE · CORRELATE · PRIORITIZE</small></footer>
-
-  <div id="ocSalesChatWidget" class="oc-sales-widget">
-    <section id="ocSalesChatPanel" class="oc-sales-panel" aria-label="Asistente comercial" hidden>
-      <header class="oc-sales-header">
-        <div>
-          <div class="oc-sales-brand">◈ OBSIDIAN<span>CYBER</span></div>
-          <div class="oc-sales-eyebrow">ASISTENTE COMERCIAL</div>
-        </div>
-        <button id="ocSalesChatClose" class="oc-sales-close" type="button" aria-label="Cerrar chat">×</button>
-      </header>
-      <div id="ocSalesChatMessages" class="oc-sales-messages" role="log" aria-live="polite">
-        <div class="oc-sales-bubble assistant">Hola, bienvenido a ObsidianCyber. ¿Gestionas webs de clientes o quieres conocer la exposición pública de tu propio dominio?</div>
-      </div>
-      <div id="ocSalesCheckout" class="oc-sales-checkout" hidden>
-        <button id="ocSalesCheckoutBack" class="oc-sales-back" type="button">← Volver al chat</button>
-        <div id="ocSalesCheckoutSlot"></div>
-      </div>
-      <div class="oc-sales-links">
-        <button id="ocSalesBuyNow" class="oc-sales-buy" type="button">Comprar aquí · <span class="pilot-price-total">79,00 €</span></button>
-        <a href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a>
-        <a href="#contacto" id="ocSalesContactLink">Hablar con una persona</a>
-      </div>
-      <form id="ocSalesChatForm" class="oc-sales-form">
-        <label class="oc-sales-sr" for="ocSalesChatInput">Tu mensaje</label>
-        <input id="ocSalesChatInput" name="message" maxlength="1000" autocomplete="off" placeholder="Escribe tu pregunta…" required>
-        <button id="ocSalesChatSend" type="submit">Enviar</button>
-      </form>
-      <p class="oc-sales-disclaimer">Asistente de IA. No introduzcas datos sensibles. El informe solo se genera tras la confirmación del pago por el servidor.</p>
-    </section>
-    <button id="ocSalesChatToggle" class="oc-sales-toggle" type="button" aria-expanded="false" aria-controls="ocSalesChatPanel">
-      <span class="oc-sales-toggle-icon">◈</span> Habla con ObsidianCyber
-    </button>
-  </div>
-
-  <script src="script.js" defer></script>
+<footer class="footer"><a class="brand" href="#top">◈ OBSIDIAN<span>CYBER</span></a><small>© <span id="year"></span> ObsidianCyber · Servicio piloto · Alcance técnico limitado</small><small>DNS · HTTPS / TLS · INFORME</small></footer>
+<script src="script.js" defer></script>
 </body>
 </html>
