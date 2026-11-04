@@ -236,3 +236,15 @@ button:disabled{opacity:.65;cursor:wait}.capability-grid article{display:flex;fl
 .oc-sales-checkout #paypalButtonContainer { min-height: 48px; margin-top: 10px; }
 .oc-sales-checkout .verification-actions { margin: 14px 0; }
 .oc-sales-checkout .verification-actions .button { width: 100%; }
+
+/* Self-service checkout form */
+#orderForm>input[type="text"],#orderForm>input[type="email"]{display:block;width:100%;margin:7px 0 18px;padding:14px 15px;background:#050b10;border:1px solid #29434b;color:#effafa;font:13px 'DM Mono',monospace;border-radius:2px}
+#orderForm>input:focus{outline:2px solid var(--cyan);outline-offset:2px}
+#orderForm>label:not(.consent){display:block;margin:18px 0 8px;color:#b8cbd0;font:10px 'DM Mono',monospace;letter-spacing:.08em}
+#orderForm>.button{margin-top:20px;width:100%;min-height:48px}
+#orderForm .consent{align-items:flex-start;line-height:1.8;font:11px Manrope,sans-serif;letter-spacing:0;color:#a9bec4}
+#orderForm .consent input{margin-top:4px;flex:0 0 auto}
+#orderForm .consent a{color:var(--cyan);text-decoration:underline;text-underline-offset:3px}
+#inlinePayPalPanel{display:block;margin-top:18px}
+#inlinePayPalPanel[hidden],#verificationPanel[hidden],#report[hidden]{display:none!important}
+@media(max-width:760px){#orderForm{padding:18px}#orderForm>.button{width:100%}}
