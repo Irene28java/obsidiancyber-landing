@@ -336,7 +336,7 @@ async function loadCommercialStatus() {
     const dnsRequired = health.dns_verification_required !== false;
     const dnsReady = health.dns_txt_verification_ready === true || !dnsRequired;
     const paymentReady = health.payment_enabled === true;
-    createOrderButton.disabled = !dnsReady;
+    createOrderButton.disabled = !dnsReady || !paymentReady;
     const workspaceIntro = document.querySelector('#workspaceIntro');
     if (workspaceIntro && !dnsRequired) {
       workspaceIntro.textContent = 'Indica tu dominio y confirma que tienes autorización para revisarlo. Después podrás elegir un método de pago disponible. El informe se genera y se muestra únicamente cuando el servidor confirma el pago.';
@@ -396,9 +396,22 @@ orderForm?.addEventListener('submit', async (event) => {
     sessionStorage.setItem('oc-pending-order', JSON.stringify(order));
     showVerification(order);
     setOrderMessage(order.verified
-      ? `Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Elige tu método de pago.`
+      ? `Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Preparando el pago seguro…`
       : `Solicitud ${order.order_id} creada. Aún no se ha cobrado nada. Publica el TXT y verifica el dominio.`, 'success');
     verificationPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (order.verified && commercialHealth?.payment_enabled === true) {
+      payButton.hidden = true;
+      inlinePayPalPanel.hidden = false;
+      inlinePaymentMessage.textContent = 'Cargando el pago seguro…';
+      try {
+        await mountInlinePayPalCheckout();
+      } catch (paymentError) {
+        payButton.hidden = false;
+        payButton.disabled = false;
+        inlinePaymentMessage.textContent = paymentError.message || 'No se pudo cargar el pago seguro. Puedes reintentarlo.';
+        setOrderMessage(inlinePaymentMessage.textContent, 'error');
+      }
+    }
   } catch (error) {
     setOrderMessage(error.message || 'No se pudo crear la solicitud.', 'error');
   } finally {
