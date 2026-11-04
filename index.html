@@ -75,6 +75,41 @@
 <p><strong>¿Y si no se puede generar el informe?</strong><br>Si el pago se confirma pero el informe no queda disponible, no vuelvas a pagar. Conserva la referencia del pedido y contacta con soporte.</p></div></section>
 <section class="closing wrap"><div><div class="eyebrow">OBSIDIAN CYBER</div><h2>Evidencias primero.<br><em>Alcance honesto.</em></h2><p class="closing-note">Una revisión limitada, explicada con claridad.</p></div><a class="button" href="#top">Volver arriba ↑</a></section>
 </main>
+
+  <div id="ocSalesChatWidget" class="oc-sales-widget">
+    <section id="ocSalesChatPanel" class="oc-sales-panel" aria-label="Asistente comercial" hidden>
+      <header class="oc-sales-header">
+        <div>
+          <div class="oc-sales-brand">◈ OBSIDIAN<span>CYBER</span></div>
+          <div class="oc-sales-eyebrow">ASISTENTE COMERCIAL</div>
+        </div>
+        <button id="ocSalesChatClose" class="oc-sales-close" type="button" aria-label="Cerrar chat">×</button>
+      </header>
+      <div id="ocSalesChatMessages" class="oc-sales-messages" role="log" aria-live="polite">
+        <div class="oc-sales-bubble assistant">Hola, bienvenido a ObsidianCyber. ¿Gestionas webs de clientes o quieres conocer la exposición pública de tu propio dominio?</div>
+      </div>
+      <div id="ocSalesCheckout" class="oc-sales-checkout" hidden>
+        <button id="ocSalesCheckoutBack" class="oc-sales-back" type="button">← Volver al chat</button>
+        <div id="ocSalesCheckoutSlot"></div>
+      </div>
+      <div class="oc-sales-links">
+        <button id="ocSalesBuyNow" class="oc-sales-buy" type="button">Comprar aquí · <span class="pilot-price-total">79,00 €</span></button>
+        <a href="sample-report.html" target="_blank" rel="noopener noreferrer">Ver informe de muestra ↗</a>
+        <a href="#workspace" id="ocSalesContactLink">Hablar con una persona</a>
+      </div>
+      <form id="ocSalesChatForm" class="oc-sales-form">
+        <label class="oc-sales-sr" for="ocSalesChatInput">Tu mensaje</label>
+        <input id="ocSalesChatInput" name="message" maxlength="1000" autocomplete="off" placeholder="Escribe tu pregunta…" required>
+        <button id="ocSalesChatSend" type="submit">Enviar</button>
+      </form>
+      <p class="oc-sales-disclaimer">Asistente de IA. No introduzcas datos sensibles. El informe solo se genera tras la confirmación del pago por el servidor.</p>
+    </section>
+    <button id="ocSalesChatToggle" class="oc-sales-toggle" type="button" aria-expanded="false" aria-controls="ocSalesChatPanel">
+      <span class="oc-sales-toggle-icon">◈</span> Habla con ObsidianCyber
+    </button>
+  </div>
+
+
 <footer class="footer"><a class="brand" href="#top">◈ OBSIDIAN<span>CYBER</span></a><small>© <span id="year"></span> ObsidianCyber · Exposure Brief</small><small>DNS · HTTPS / TLS · INFORME PDF</small></footer>
 <script src="script.js" defer></script>
 </body></html>
